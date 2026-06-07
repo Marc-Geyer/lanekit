@@ -148,4 +148,5 @@ STRINGS = {
     'msg_exception_saved':      'Exception for {date} saved.',
     'msg_no_permission':        'Permission denied.',
     'msg_user_updated':         'User updated.',
+    'group_description_ph':        'No description.',
 }

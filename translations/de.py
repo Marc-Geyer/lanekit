@@ -75,6 +75,7 @@ STRINGS = {
     'role_trainer':             'Trainer',
     'role_swimmer':             'Schwimmer',
     'no_members_yet':           'Noch keine Mitglieder.',
+    'group_description_ph':     'Keine Beschreibung.',
     'no_sessions_yet':          'Keine Trainingstermine konfiguriert.',
     'btn_edit_group':           'Gruppe bearbeiten',
     'btn_remove':               'Entfernen',

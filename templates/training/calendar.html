@@ -43,7 +43,11 @@
 const CALENDAR_EVENTS_URL = "{% url 'calendar_events_api' %}";
 const SESSION_MODAL_URL_TEMPLATE = "/training/session/{session_id}/{date}/";
 const IS_AUTHENTICATED = {{ user.is_authenticated|yesno:"true,false" }};
-const IS_TRAINER = {{ user.is_authenticated|yesno:"true,false" }} && {{ user.is_authenticated and user.profile.is_trainer|yesno:"true,false" }};
+{% if user.is_authenticated and user.profile.is_trainer %}
+const IS_TRAINER = true;
+{% else %}
+const IS_TRAINER = false;
+{% endif %}
 </script>
 {% load static %}
 <script src="{% static 'js/calendar.js' %}"></script>

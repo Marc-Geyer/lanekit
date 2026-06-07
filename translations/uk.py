@@ -75,6 +75,7 @@ STRINGS = {
     'role_trainer':             'Тренер',
     'role_swimmer':             'Плавець',
     'no_members_yet':           'Поки немає учасників.',
+    'group_description_ph':     'Немає опису.',
     'no_sessions_yet':          'Тренувальних занять не налаштовано.',
     'btn_edit_group':           'Редагувати групу',
     'btn_remove':               'Видалити',

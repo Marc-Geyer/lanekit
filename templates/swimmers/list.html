@@ -47,7 +47,7 @@
     <a href="{% if user.is_authenticated %}{% url 'swimmer_detail' swimmer.pk %}{% else %}#{% endif %}"
        class="text-decoration-none">
       <div class="sc-card swimmer-card p-3 d-flex align-items-center gap-3">
-        <div class="sc-avatar">{{ swimmer.initials }}</div>
+        <div class="sc-avatar-sm">{{ swimmer.initials }}</div>
         <div class="flex-grow-1 min-w-0">
           <div class="fw-semibold text-truncate">{{ swimmer.full_name }}</div>
           {% if user.is_authenticated %}

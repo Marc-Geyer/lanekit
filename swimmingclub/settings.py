@@ -122,6 +122,13 @@ LOGOUT_REDIRECT_URL = '/'
 CRISPY_ALLOWED_TEMPLATE_PACKS = 'bootstrap5'
 CRISPY_TEMPLATE_PACK = 'bootstrap5'
 
+
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', f'info@{APP_NAME.lower()}.com')
+
+# DEBUG: emails get printed into console
+if DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
 # Required when running behind an HTTPS reverse proxy
 _domain = os.environ.get('DOMAIN', '')
 if _domain:

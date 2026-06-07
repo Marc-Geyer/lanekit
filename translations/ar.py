@@ -76,6 +76,7 @@ STRINGS = {
     'role_trainer':             'مدرب',
     'role_swimmer':             'سباح',
     'no_members_yet':           'لا يوجد أعضاء بعد.',
+    'group_description_ph':     'لا يوجد وصف.',
     'no_sessions_yet':          'لم يتم تكوين جلسات تدريب.',
     'btn_edit_group':           'تعديل المجموعة',
     'btn_remove':               'إزالة',
