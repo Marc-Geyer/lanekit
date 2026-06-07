@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block title %}{{ t.calendar_title }}{% endblock %}
+{% block main_class %}container-fluid px-4 py-3{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <div>
+    <h1 class="fw-bold mb-0" style="font-family:'Syne',sans-serif">
+      <i class="bi bi-calendar3 text-primary me-2"></i>{{ t.calendar_title }}
+      {% if ORGANISATION_NAME %}<span class="text-muted fw-normal fs-5 ms-2">{{ ORGANISATION_NAME }}</span>{% endif %}
+    </h1>
+    <p class="text-muted small mb-0">{{ t.calendar_subtitle }}</p>
+  </div>
+  <div class="d-flex gap-2 align-items-center flex-wrap">
+    {% if user.is_authenticated %}
+    <button id="mySessionsToggle" class="btn btn-outline-primary btn-sm rounded-pill px-3">
+      <i class="bi bi-person-check me-1"></i>{{ t.btn_my_sessions }}
+    </button>
+    {% endif %}
+    {% if user.is_authenticated and user.profile.is_trainer %}
+    <a href="{% url 'exception_create' %}" class="btn btn-outline-danger btn-sm rounded-pill px-3">
+      <i class="bi bi-calendar-x me-1"></i>{{ t.btn_exception }}
+    </a>
+    {% endif %}
+    <div class="d-flex gap-2 align-items-center ms-2">
+      {% for group in groups %}
+      <span class="badge rounded-pill d-flex align-items-center gap-1"
+            style="background:{{ group.color }}22; color:{{ group.color }}; border:1px solid {{ group.color }}55; font-size:.75rem">
+        <span class="group-swatch" style="background:{{ group.color }}"></span>{{ group.name }}
+      </span>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="sc-card p-3">
+  <div id="calendar"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CALENDAR_EVENTS_URL = "{% url 'calendar_events_api' %}";
+const SESSION_MODAL_URL_TEMPLATE = "/training/session/{session_id}/{date}/";
+const IS_AUTHENTICATED = {{ user.is_authenticated|yesno:"true,false" }};
+const IS_TRAINER = {{ user.is_authenticated|yesno:"true,false" }} && {{ user.is_authenticated and user.profile.is_trainer|yesno:"true,false" }};
+</script>
+{% load static %}
+<script src="{% static 'js/calendar.js' %}"></script>
+{% endblock %}

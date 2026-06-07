@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}{{ t.excuse_confirmed_title }}{% endblock %}
+{% block main_class %}d-flex align-items-center justify-content-center min-vh-100{% endblock %}
+{% block content %}
+<div class="sc-card p-5 text-center" style="max-width:480px;margin:0 auto">
+  <i class="bi bi-check-circle-fill text-success mb-3 d-block" style="font-size:3rem"></i>
+  <h4 class="fw-bold mb-2">{{ t.excuse_confirmed_title }}</h4>
+  <p class="text-muted">{{ excuse.swimmer.full_name }} – {{ excuse.date|date:"d.m.Y" }}</p>
+</div>
+{% endblock %}

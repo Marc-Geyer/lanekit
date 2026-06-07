@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% block title %}{{ t.people_title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <h2 class="fw-bold mb-0" style="font-family:'Syne',sans-serif">
+    <i class="bi bi-person-badge text-primary me-2"></i>{{ t.people_title }}
+  </h2>
+  {% if user.is_authenticated and user.profile.is_trainer %}
+  <a href="{% url 'swimmer_create' %}" class="btn btn-primary rounded-pill px-4">
+    <i class="bi bi-plus-lg me-1"></i>{{ t.btn_new_swimmer }}
+  </a>
+  {% endif %}
+</div>
+
+<div class="sc-card p-3 mb-4">
+  <form method="get" class="row g-2 align-items-end">
+    <div class="col-md-5">
+      <input type="search" name="q" value="{{ q }}"
+             class="form-control bg-transparent border-secondary text-light"
+             placeholder="{{ t.search_ph }}">
+    </div>
+    <div class="col-md-3">
+      <select name="group" class="form-select bg-transparent border-secondary text-light">
+        <option value="">{{ t.all_groups }}</option>
+        {% for g in groups %}
+        <option value="{{ g.pk }}" {% if selected_group == g.pk|stringformat:"i" %}selected{% endif %}>{{ g.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2">
+      <div class="form-check form-switch mt-2">
+        <input class="form-check-input" type="checkbox" name="active" value="1"
+               id="activeOnly" {% if active_only %}checked{% endif %}>
+        <label class="form-check-label small" for="activeOnly">{{ t.active_only }}</label>
+      </div>
+    </div>
+    <div class="col-md-2">
+      <button class="btn btn-primary w-100">{{ t.btn_filter }}</button>
+    </div>
+  </form>
+</div>
+
+<div class="row g-3">
+  {% for swimmer in swimmers %}
+  <div class="col-md-6 col-xl-4">
+    <a href="{% if user.is_authenticated %}{% url 'swimmer_detail' swimmer.pk %}{% else %}#{% endif %}"
+       class="text-decoration-none">
+      <div class="sc-card swimmer-card p-3 d-flex align-items-center gap-3">
+        <div class="sc-avatar">{{ swimmer.initials }}</div>
+        <div class="flex-grow-1 min-w-0">
+          <div class="fw-semibold text-truncate">{{ swimmer.full_name }}</div>
+          {% if user.is_authenticated %}
+          <div class="text-muted small text-truncate">{{ swimmer.email|default:"–" }}</div>
+          {% endif %}
+          <div class="d-flex flex-wrap gap-1 mt-1">
+            {% for m in swimmer.groupmembership_set.all %}{% if m.active %}
+            <span class="badge rounded-pill"
+                  style="background:{{ m.group.color }}22;color:{{ m.group.color }};border:1px solid {{ m.group.color }}55;font-size:.68rem">
+              {% if m.role == 'trainer' %}<i class="bi bi-star-fill me-1"></i>{% endif %}{{ m.group.name }}
+            </span>
+            {% endif %}{% endfor %}
+          </div>
+        </div>
+        {% if not swimmer.active %}
+        <span class="badge bg-secondary">{{ t.inactive }}</span>
+        {% endif %}
+      </div>
+    </a>
+  </div>
+  {% empty %}
+  <div class="col-12 text-center py-5 text-muted">
+    <i class="bi bi-person-x d-block mb-2" style="font-size:2.5rem"></i>
+    <p>{{ t.no_people }}</p>
+    {% if user.is_authenticated and user.profile.is_trainer %}
+    <a href="{% url 'swimmer_create' %}" class="btn btn-primary rounded-pill">{{ t.btn_create_swimmer }}</a>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+<div class="text-muted small mt-3">{{ swimmers|length }} {{ t.results }}</div>
+{% endblock %}

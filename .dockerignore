@@ -1,0 +1,41 @@
+# Version control
+.git
+.gitignore
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Django
+db.sqlite3
+*.sqlite3
+/staticfiles/
+/media/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Docker files (not needed inside image)
+docker/
+docker-compose*.yml
+Dockerfile
+
+# Secrets / env files
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Docs
+README.md
+*.md

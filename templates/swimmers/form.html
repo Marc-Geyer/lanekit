@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% block title %}{{ t.btn_new_swimmer }}{% endblock %}
+{% block content %}
+<div class="mb-3">
+  <a href="{% url 'swimmer_list' %}" class="btn btn-sm btn-outline-secondary rounded-pill">
+    <i class="bi bi-arrow-left me-1"></i>{{ t.btn_back }}
+  </a>
+</div>
+<div class="sc-card p-4" style="max-width:680px;margin:0 auto">
+  <h4 class="fw-bold mb-4" style="font-family:'Syne',sans-serif">
+    <i class="bi bi-person-plus text-primary me-2"></i>{{ t.btn_new_swimmer }}
+  </h4>
+  {% crispy form %}
+</div>
+{% endblock %}

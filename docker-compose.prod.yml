@@ -1,0 +1,121 @@
+##############################################################################
+# LaneKit – Production Compose
+#
+# First-time setup – run ONCE before starting this file:
+#   ./docker/certbot/init-letsencrypt.sh
+#
+# Every subsequent start:
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# All secrets come from .env  (see .env.example).
+##############################################################################
+
+services:
+
+  # ── Django / Daphne ASGI ───────────────────────────────────────────────────
+  app:
+    build:
+      context: ../lanekit(1)/swimmingclub
+      dockerfile: Dockerfile
+    command: >
+      daphne -b 0.0.0.0 -p 8000
+      swimmingclub.asgi:application
+    volumes:
+      - prod_staticfiles:/app/staticfiles
+      - prod_media:/app/media
+    environment:
+      DEBUG: "False"
+      SECRET_KEY: ${SECRET_KEY}
+      DOMAIN: ${DOMAIN}
+      ORGANISATION_NAME: ${ORGANISATION_NAME}
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_URL: redis://redis:6379/0
+      DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-}
+      DJANGO_SUPERUSER_EMAIL: ${DJANGO_SUPERUSER_EMAIL:-}
+      DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    # Not exposed directly – nginx proxies to it
+    expose:
+      - "8000"
+
+  # ── Nginx reverse proxy ────────────────────────────────────────────────────
+  nginx:
+    build:
+      context: docker/nginx
+      dockerfile: docker/nginx/Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - prod_staticfiles:/app/staticfiles:ro
+      - prod_media:/app/media:ro
+      - certbot_certs:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  # ── Certbot – automatic certificate renewal ────────────────────────────────
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    # Loop: try to renew every 12 h (certbot skips if cert is still fresh)
+    entrypoint: >
+      /bin/sh -c "trap exit TERM;
+        while :; do
+          certbot renew --webroot -w /var/www/certbot --quiet;
+          sleep 12h & wait $${!};
+        done"
+    restart: unless-stopped
+
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - prod_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    # No external port – only app can reach it
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - prod_redis:/data
+    command: redis-server --save 60 1 --loglevel warning
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    # No external port
+
+volumes:
+  prod_postgres:
+  prod_redis:
+  prod_staticfiles:
+  prod_media:
+  certbot_certs:
+  certbot_www:

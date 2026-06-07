@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}{{ t.excuse_used_title }}{% endblock %}
+{% block main_class %}d-flex align-items-center justify-content-center min-vh-100{% endblock %}
+{% block content %}
+<div class="sc-card p-5 text-center" style="max-width:480px;margin:0 auto">
+  <i class="bi bi-exclamation-triangle text-warning mb-3 d-block" style="font-size:3rem"></i>
+  <h4 class="fw-bold mb-2">{{ t.excuse_used_title }}</h4>
+  <p class="text-muted">{{ excuse.used_at|date:"d.m.Y H:i" }}</p>
+</div>
+{% endblock %}

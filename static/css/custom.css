@@ -1,0 +1,290 @@
+/* ─── LaneKit Custom Styles ──────────────────────────────────────────────── */
+
+:root {
+  --sc-primary: #0ea5e9;
+  --sc-primary-dark: #0284c7;
+  --sc-accent: #38bdf8;
+  --sc-surface: #0f172a;
+  --sc-surface-2: #1e293b;
+  --sc-surface-3: #334155;
+  --sc-border: #334155;
+  --sc-text: #e2e8f0;
+  --sc-text-muted: #94a3b8;
+  --sc-success: #22c55e;
+  --sc-danger: #ef4444;
+  --sc-warning: #f59e0b;
+  --fc-border-color: #334155;
+  --fc-button-bg-color: #1e293b;
+  --fc-button-border-color: #334155;
+  --fc-button-hover-bg-color: #334155;
+  --fc-today-bg-color: rgba(14,165,233,.08);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: #1e293b;
+}
+
+/* ── Base ── */
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--sc-surface);
+  color: var(--sc-text);
+  min-height: 100vh;
+}
+
+/* ── Navbar ── */
+.sc-navbar {
+  background: rgba(15,23,42,.92);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--sc-border);
+  padding: .75rem 0;
+}
+
+.sc-logo-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, var(--sc-primary), #6366f1);
+  border-radius: 10px;
+  font-size: 1.1rem;
+  color: white;
+}
+
+.sc-logo-text {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 1.15rem;
+  background: linear-gradient(135deg, var(--sc-accent), #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Small "LaneKit" product badge shown when an org name is set */
+.sc-logo-product {
+  font-family: 'DM Sans', sans-serif;
+  font-size: .6rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  background: rgba(14,165,233,.15);
+  color: var(--sc-accent);
+  border: 1px solid rgba(14,165,233,.3);
+  padding: 2px 7px;
+  -webkit-text-fill-color: var(--sc-accent); /* override gradient from parent */
+}
+
+.nav-pill {
+  border-radius: 8px !important;
+  padding: .4rem .85rem !important;
+  font-size: .88rem;
+  font-weight: 500;
+  color: var(--sc-text-muted) !important;
+  transition: background .15s, color .15s;
+}
+.nav-pill:hover, .nav-pill.active {
+  background: var(--sc-surface-2) !important;
+  color: var(--sc-text) !important;
+}
+.nav-pill.active { color: var(--sc-primary) !important; }
+
+.sc-avatar-sm {
+  display: inline-flex;
+  align-items: center; justify-content: center;
+  width: 30px; height: 30px;
+  background: linear-gradient(135deg, var(--sc-primary), #6366f1);
+  border-radius: 50%;
+  font-size: .75rem;
+  font-weight: 700;
+  color: white;
+}
+
+/* ── Dropdown ── */
+.sc-dropdown {
+  background: var(--sc-surface-2);
+  border: 1px solid var(--sc-border);
+  border-radius: 12px;
+  padding: .5rem;
+}
+.sc-dropdown .dropdown-item {
+  border-radius: 8px;
+  color: var(--sc-text);
+  font-size: .88rem;
+  padding: .5rem .85rem;
+}
+.sc-dropdown .dropdown-item:hover { background: var(--sc-surface-3); }
+.sc-dropdown .dropdown-divider { border-color: var(--sc-border); }
+
+/* ── Alerts ── */
+.sc-alert { border-radius: 12px; border: none; }
+
+/* ── Cards ── */
+.sc-card {
+  background: var(--sc-surface-2);
+  border: 1px solid var(--sc-border);
+  border-radius: 16px;
+  transition: box-shadow .2s;
+}
+.sc-card:hover { box-shadow: 0 4px 24px rgba(0,0,0,.3); }
+
+/* ── Modal ── */
+.sc-modal {
+  background: var(--sc-surface-2);
+  border: 1px solid var(--sc-border);
+  border-radius: 20px;
+  overflow: hidden;
+}
+.sc-modal .modal-header { background: var(--sc-surface-3); }
+
+/* ── Calendar ── */
+#calendar {
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.fc {
+  font-family: 'DM Sans', sans-serif;
+}
+
+.fc .fc-toolbar-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 1.3rem;
+}
+
+.fc .fc-col-header-cell {
+  background: var(--sc-surface-2);
+  font-weight: 600;
+  font-size: .8rem;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--sc-text-muted);
+}
+
+.fc .fc-daygrid-day { background: var(--sc-surface); }
+.fc .fc-daygrid-day:hover { background: var(--sc-surface-2); }
+
+.fc-event {
+  border-radius: 6px !important;
+  padding: 2px 6px !important;
+  font-size: .78rem !important;
+  font-weight: 500 !important;
+  cursor: pointer;
+  transition: filter .15s, transform .1s;
+}
+.fc-event:hover { filter: brightness(1.15); transform: scale(1.02); }
+
+.session-planned { opacity: .75; }
+.session-instance { box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+.session-exception { opacity: .9; }
+
+.fc .fc-timegrid-event { border-radius: 8px !important; }
+
+.fc .fc-button {
+  border-radius: 8px !important;
+  font-size: .82rem !important;
+  font-weight: 500 !important;
+  background: var(--sc-surface-2) !important;
+  border-color: var(--sc-border) !important;
+  color: var(--sc-text) !important;
+}
+.fc .fc-button:hover {
+  background: var(--sc-surface-3) !important;
+}
+.fc .fc-button-primary:not(:disabled).fc-button-active {
+  background: var(--sc-primary) !important;
+  border-color: var(--sc-primary) !important;
+}
+
+/* ── Calendar toolbar toggle ── */
+#mySessionsToggle.active {
+  background: var(--sc-primary) !important;
+  border-color: var(--sc-primary) !important;
+  color: white !important;
+}
+
+/* ── Attendance table ── */
+.attendance-table td, .attendance-table th {
+  vertical-align: middle;
+}
+
+.status-btn {
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: 2px 10px;
+  font-size: .78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+}
+.status-btn[data-status="present"] { border-color: var(--sc-success); color: var(--sc-success); }
+.status-btn[data-status="absent"]  { border-color: var(--sc-danger);  color: var(--sc-danger);  }
+.status-btn[data-status="excused"] { border-color: var(--sc-warning); color: var(--sc-warning); }
+.status-btn[data-status="unknown"] { border-color: var(--sc-border);  color: var(--sc-text-muted); }
+
+.status-btn.active[data-status="present"] { background: var(--sc-success); color: #fff; }
+.status-btn.active[data-status="absent"]  { background: var(--sc-danger);  color: #fff; }
+.status-btn.active[data-status="excused"] { background: var(--sc-warning); color: #000; }
+.status-btn.active[data-status="unknown"] { background: var(--sc-surface-3); color: #fff; }
+
+/* ── Training plan ── */
+.plan-entry-row {
+  background: var(--sc-surface);
+  border: 1px solid var(--sc-border);
+  border-radius: 10px;
+  padding: .75rem 1rem;
+  margin-bottom: .5rem;
+  transition: box-shadow .15s;
+}
+.plan-entry-row:hover { box-shadow: 0 2px 12px rgba(0,0,0,.25); }
+
+.plan-entry-row .drag-handle {
+  cursor: grab;
+  color: var(--sc-text-muted);
+}
+.plan-entry-row .drag-handle:active { cursor: grabbing; }
+
+.category-badge-warmup  { background: #f59e0b22; color: #f59e0b; }
+.category-badge-main    { background: #0ea5e922; color: #0ea5e9; }
+.category-badge-cooldown{ background: #22c55e22; color: #22c55e; }
+
+/* ── WS indicator ── */
+.ws-dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--sc-border);
+  transition: background .3s;
+}
+.ws-dot.connected   { background: var(--sc-success); box-shadow: 0 0 6px var(--sc-success); }
+.ws-dot.connecting  { background: var(--sc-warning); animation: pulse 1s infinite; }
+.ws-dot.error       { background: var(--sc-danger); }
+
+@keyframes pulse {
+  0%,100% { opacity:1; } 50% { opacity:.3; }
+}
+
+/* ── Swimmer cards ── */
+.swimmer-card .sc-avatar {
+  width: 52px; height: 52px;
+  background: linear-gradient(135deg, var(--sc-primary), #6366f1);
+  border-radius: 14px;
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 1.2rem;
+  display: flex; align-items: center; justify-content: center;
+  color: white;
+  flex-shrink: 0;
+}
+
+/* ── Group color swatch ── */
+.group-swatch {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .fc .fc-toolbar { flex-direction: column; gap: .5rem; }
+}

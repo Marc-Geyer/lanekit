@@ -1,0 +1,83 @@
+##############################################################################
+# LaneKit – Development Compose
+#
+# Usage:
+#   cp .env.example .env          # then set ORGANISATION_NAME, keep DEBUG=True
+#   docker compose up             # starts app + db + redis
+#   docker compose exec app python manage.py createsuperuser
+#
+# The app source is bind-mounted so edits reload instantly.
+# Access the app at  http://localhost:8000
+##############################################################################
+
+services:
+
+  app:
+    build:
+      context: ../lanekit(1)/swimmingclub
+      dockerfile: Dockerfile
+    # Override CMD to use Django's auto-reloading ASGI dev server
+    command: >
+      daphne -b 0.0.0.0 -p 8000
+      --verbosity 2
+      swimmingclub.asgi:application
+    volumes:
+      # Bind-mount source for hot-reload (entrypoint runs migrations on each start)
+      - .:/app
+      # Keep container-generated files out of the host tree
+      - dev_staticfiles:/app/staticfiles
+      - dev_media:/app/media
+    ports:
+      - "8000:8000"
+    environment:
+      DEBUG: "True"
+      SECRET_KEY: dev-secret-key-not-for-production
+      ORGANISATION_NAME: ${ORGANISATION_NAME:-My Swimming Club}
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: ${DB_NAME:-lanekit}
+      DB_USER: ${DB_USER:-lanekit}
+      DB_PASSWORD: ${DB_PASSWORD:-lanekit}
+      REDIS_URL: redis://redis:6379/0
+      DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-admin}
+      DJANGO_SUPERUSER_EMAIL: ${DJANGO_SUPERUSER_EMAIL:-admin@localhost}
+      DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD:-admin}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-lanekit}
+      POSTGRES_USER: ${DB_USER:-lanekit}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-lanekit}
+    volumes:
+      - dev_postgres:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"          # exposed so you can connect with pgAdmin / psql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-lanekit}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"          # exposed for debugging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  dev_postgres:
+  dev_staticfiles:
+  dev_media:

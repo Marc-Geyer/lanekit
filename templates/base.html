@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}" dir="{% if is_rtl %}rtl{% else %}ltr{% endif %}" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ SITE_TITLE }}{% endblock %} · {{ APP_NAME }}</title>
+
+  {% if is_rtl %}
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+  {% else %}
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  {% endif %}
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&{% if lang == 'ar' %}family=Noto+Sans+Arabic:wght@300;400;500;700&{% endif %}display=swap" rel="stylesheet">
+
+  {% load static %}
+  <link href="{% static 'css/custom.css' %}" rel="stylesheet">
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-dark sc-navbar sticky-top">
+  <div class="container-fluid px-4">
+
+    <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'calendar' %}">
+      <span class="sc-logo-icon"><i class="bi bi-water"></i></span>
+      <span class="sc-logo-text">
+        {% if ORGANISATION_NAME %}{{ ORGANISATION_NAME }}{% else %}{{ APP_NAME }}{% endif %}
+      </span>
+      {% if ORGANISATION_NAME %}
+      <span class="sc-logo-product badge rounded-pill">{{ APP_NAME }}</span>
+      {% endif %}
+    </a>
+
+    <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="navbarMain">
+      <ul class="navbar-nav me-auto gap-1">
+        <li class="nav-item">
+          <a class="nav-link nav-pill {% if request.resolver_match.url_name == 'calendar' %}active{% endif %}"
+             href="{% url 'calendar' %}">
+            <i class="bi bi-calendar3"></i> {{ t.nav_calendar }}
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link nav-pill {% if 'group' in request.resolver_match.url_name %}active{% endif %}"
+             href="{% url 'group_list' %}">
+            <i class="bi bi-people-fill"></i> {{ t.nav_groups }}
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link nav-pill {% if 'swimmer' in request.resolver_match.url_name %}active{% endif %}"
+             href="{% url 'swimmer_list' %}">
+            <i class="bi bi-person-badge"></i> {{ t.nav_people }}
+          </a>
+        </li>
+        {% if user.is_authenticated and user.profile.is_trainer %}
+        <li class="nav-item">
+          <a class="nav-link nav-pill" href="{% url 'exception_create' %}">
+            <i class="bi bi-calendar-x"></i> {{ t.nav_exception }}
+          </a>
+        </li>
+        {% endif %}
+      </ul>
+
+      <ul class="navbar-nav ms-auto gap-1 align-items-center">
+
+        <!-- ── Language switcher ── -->
+        <li class="nav-item dropdown">
+          <a class="nav-link nav-pill d-flex align-items-center gap-1 dropdown-toggle"
+             href="#" data-bs-toggle="dropdown" aria-expanded="false">
+            {% for code, name, flag in LANGUAGES %}{% if code == lang %}{{ flag }}{% endif %}{% endfor %}
+            <span class="d-none d-sm-inline" style="font-size:.78rem;font-weight:600;letter-spacing:.04em">
+              {{ lang|upper }}
+            </span>
+          </a>
+          <ul class="dropdown-menu dropdown-menu-end sc-dropdown">
+            {% for code, name, flag in LANGUAGES %}
+            <li>
+              <a class="dropdown-item d-flex align-items-center gap-2 {% if code == lang %}active{% endif %}"
+                 href="{% url 'set_language' %}?lang={{ code }}&next={{ request.path }}">
+                <span>{{ flag }}</span>
+                <span>{{ name }}</span>
+                {% if code == lang %}<i class="bi bi-check-lg ms-auto text-primary"></i>{% endif %}
+              </a>
+            </li>
+            {% endfor %}
+          </ul>
+        </li>
+
+        {% if user.is_authenticated %}
+        <li class="nav-item dropdown">
+          <a class="nav-link nav-pill d-flex align-items-center gap-2 dropdown-toggle"
+             href="#" data-bs-toggle="dropdown">
+            <span class="sc-avatar-sm">{{ user.profile.display_name|slice:":1"|upper }}</span>
+            <span class="d-none d-md-inline">{{ user.profile.display_name }}</span>
+          </a>
+          <ul class="dropdown-menu dropdown-menu-end sc-dropdown">
+            <li><a class="dropdown-item" href="{% url 'profile' %}">
+              <i class="bi bi-person-circle me-2"></i>{{ t.nav_profile }}
+            </a></li>
+            {% if user.profile.is_admin %}
+            <li><a class="dropdown-item" href="{% url 'user_list' %}">
+              <i class="bi bi-people me-2"></i>{{ t.nav_user_mgmt }}
+            </a></li>
+            {% endif %}
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item text-danger" href="{% url 'logout' %}">
+              <i class="bi bi-box-arrow-right me-2"></i>{{ t.nav_logout }}
+            </a></li>
+          </ul>
+        </li>
+        {% else %}
+        <li class="nav-item">
+          <a class="nav-link nav-pill" href="{% url 'login' %}">
+            <i class="bi bi-box-arrow-in-right"></i> {{ t.nav_login }}
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="btn btn-primary btn-sm rounded-pill px-3" href="{% url 'register' %}">
+            {{ t.nav_register }}
+          </a>
+        </li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+</nav>
+
+{% if messages %}
+<div class="container-fluid px-4 mt-3">
+  {% for message in messages %}
+  <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show sc-alert" role="alert">
+    {{ message }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<main class="{% block main_class %}container-fluid px-4 py-4{% endblock %}">
+  {% block content %}{% endblock %}
+</main>
+
+<!-- Session modal -->
+<div class="modal fade" id="sessionModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content sc-modal">
+      <div class="modal-header border-0">
+        <h5 class="modal-title fw-bold" id="sessionModalTitle">Training</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="sessionModalBody">
+        <div class="text-center py-5">
+          <div class="spinner-border text-primary" role="status"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+
+<!-- Pass translated strings to JavaScript -->
+<script>
+const LANG = "{{ lang }}";
+const IS_RTL = {{ is_rtl|yesno:"true,false" }};
+const WS_STRINGS = {
+  live:         "{{ t.ws_live|escapejs }}",
+  connecting:   "{{ t.ws_connecting|escapejs }}",
+  disconnected: "{{ t.ws_disconnected|escapejs }}",
+  error:        "{{ t.ws_error|escapejs }}",
+};
+const UI_STRINGS = {
+  confirmDeleteEntry:  "{{ t.confirm_delete_entry|escapejs }}",
+  confirmRemoveMember: "{{ t.confirm_remove_member|escapejs }}",
+  confirmDeactivate:   "{{ t.confirm_deactivate|escapejs }}",
+  btnEdit:     "{{ t.btn_edit|escapejs }}",
+  btnCancel:   "{{ t.btn_cancel|escapejs }}",
+  btnDelete:   "{{ t.btn_delete|escapejs }}",
+  btnSave:     "{{ t.btn_save_entry|escapejs }}",
+  noEntries:   "{{ t.no_entries|escapejs }}",
+  catWarmup:   "{{ t.cat_warmup|escapejs }}",
+  catMain:     "{{ t.cat_main|escapejs }}",
+  catCooldown: "{{ t.cat_cooldown|escapejs }}",
+  lblDistance:    "{{ t.lbl_distance|escapejs }}",
+  lblIntensity:   "{{ t.lbl_intensity|escapejs }}",
+  lblRest:        "{{ t.lbl_rest|escapejs }}",
+  lblDescription: "{{ t.lbl_description|escapejs }}",
+  lblCategory:    "{{ t.lbl_category|escapejs }}",
+};
+</script>
+
+{% load static %}
+<script src="{% static 'js/session.js' %}"></script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

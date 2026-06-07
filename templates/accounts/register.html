@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% block title %}{{ t.register_title }}{% endblock %}
+{% block main_class %}d-flex align-items-center justify-content-center py-5{% endblock %}
+
+{% block content %}
+<div class="w-100" style="max-width:520px;margin:0 auto">
+  <div class="text-center mb-4">
+    <div class="sc-logo-icon mx-auto mb-3" style="width:56px;height:56px;font-size:1.6rem">
+      <i class="bi bi-person-plus"></i>
+    </div>
+    <h2 class="fw-bold" style="font-family:'Syne',sans-serif">{{ t.register_title }}</h2>
+    {# register_subtitle contains {org} – we split and wrap it manually #}
+    <p class="text-muted">
+      {{ t.register_subtitle|truncatewords_html:3 }}
+      <strong>{{ ORGANISATION_NAME|default:APP_NAME }}</strong>
+    </p>
+  </div>
+  <div class="sc-card p-4">
+    {% crispy form %}
+    <hr class="my-3" style="border-color:#334155">
+    <p class="text-center text-muted small mb-0">
+      {{ t.already_registered }}
+      <a href="{% url 'login' %}" class="text-primary fw-medium">{{ t.nav_login }}</a>
+    </p>
+  </div>
+</div>
+{% endblock %}

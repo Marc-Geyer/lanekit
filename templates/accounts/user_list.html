@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block title %}{{ t.user_mgmt_title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <h2 class="fw-bold mb-0" style="font-family:'Syne',sans-serif">
+    <i class="bi bi-people text-primary me-2"></i>{{ t.user_mgmt_title }}
+  </h2>
+</div>
+<div class="sc-card p-3 mb-4">
+  <form method="get" class="d-flex gap-2">
+    <input type="search" name="q" value="{{ q }}"
+           class="form-control bg-transparent border-secondary text-light"
+           placeholder="{{ t.search_users_ph }}">
+    <button class="btn btn-primary px-4">{{ t.btn_search }}</button>
+  </form>
+</div>
+<div class="sc-card overflow-hidden">
+  <table class="table table-hover mb-0 align-middle">
+    <thead style="background:#1e293b">
+      <tr>
+        <th class="ps-4">{{ t.nav_people }}</th>
+        <th>Email</th>
+        <th>{{ t.nav_profile }}</th>
+        <th>{{ t.joined }}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td class="ps-4">
+          <div class="d-flex align-items-center gap-3">
+            <div class="sc-avatar-sm">{{ u.get_full_name|slice:":1"|upper|default:u.username|slice:":1"|upper }}</div>
+            <div>
+              <div class="fw-medium">{{ u.get_full_name|default:u.username }}</div>
+              <small class="text-muted">@{{ u.username }}</small>
+            </div>
+          </div>
+        </td>
+        <td class="text-muted">{{ u.email|default:"–" }}</td>
+        <td>
+          <span class="badge rounded-pill
+            {% if u.profile.role == 'admin' %}bg-danger
+            {% elif u.profile.role == 'trainer' %}bg-warning text-dark
+            {% else %}bg-secondary{% endif %}">
+            {% if u.profile.role == 'admin' %}{{ t.role_admin }}
+            {% elif u.profile.role == 'trainer' %}{{ t.role_trainer }}
+            {% else %}{{ t.role_swimmer }}{% endif %}
+          </span>
+        </td>
+        <td class="text-muted small">{{ u.date_joined|date:"d.m.Y" }}</td>
+        <td class="text-end pe-3">
+          <a href="{% url 'user_detail' u.pk %}" class="btn btn-sm btn-outline-secondary rounded-pill">
+            <i class="bi bi-pencil"></i>
+          </a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="text-center text-muted py-4">{{ t.no_people }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

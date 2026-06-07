@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}{{ t.btn_deactivate }}{% endblock %}
+{% block content %}
+<div class="sc-card p-5 text-center" style="max-width:480px;margin:0 auto">
+  <i class="bi bi-person-dash text-danger mb-3 d-block" style="font-size:3rem"></i>
+  <h4 class="fw-bold mb-2">{{ swimmer.full_name }}</h4>
+  <p class="text-muted">{{ t.deactivate_note }}</p>
+  <div class="d-flex gap-2 justify-content-center mt-4">
+    <a href="{% url 'swimmer_detail' swimmer.pk %}" class="btn btn-secondary rounded-pill px-4">{{ t.btn_cancel }}</a>
+    <form method="post">{% csrf_token %}
+      <button class="btn btn-danger rounded-pill px-4">{{ t.btn_deactivate }}</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

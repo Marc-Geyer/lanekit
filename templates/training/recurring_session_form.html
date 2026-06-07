@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% block title %}{{ t.section_sessions }}{% endblock %}
+{% block content %}
+<div class="mb-3">
+  <a href="{% url 'group_detail' group.pk %}" class="btn btn-sm btn-outline-secondary rounded-pill">
+    <i class="bi bi-arrow-left me-1"></i>{{ t.btn_back }}
+  </a>
+</div>
+<div class="sc-card p-4" style="max-width:580px;margin:0 auto">
+  <h4 class="fw-bold mb-1" style="font-family:'Syne',sans-serif">
+    <i class="bi bi-calendar-plus text-primary me-2"></i>
+    {% if session %}{{ t.btn_edit_group }}{% else %}{{ t.btn_add_session }}{% endif %}
+  </h4>
+  <p class="text-muted mb-4">{{ group.name }}</p>
+  {% crispy form %}
+</div>
+{% endblock %}

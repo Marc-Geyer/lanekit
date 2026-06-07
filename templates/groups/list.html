@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block title %}{{ t.groups_title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <h2 class="fw-bold mb-0" style="font-family:'Syne',sans-serif">
+    <i class="bi bi-people-fill text-primary me-2"></i>{{ t.groups_title }}
+  </h2>
+  {% if user.is_authenticated and user.profile.is_admin %}
+  <a href="{% url 'group_create' %}" class="btn btn-primary rounded-pill px-4">
+    <i class="bi bi-plus-lg me-1"></i>{{ t.btn_new_group }}
+  </a>
+  {% endif %}
+</div>
+
+<div class="row g-3">
+  {% for group in groups %}
+  <div class="col-md-6 col-xl-4">
+    <a href="{% url 'group_detail' group.pk %}" class="text-decoration-none">
+      <div class="sc-card p-4 h-100" style="border-left:4px solid {{ group.color }}">
+        <div class="d-flex align-items-start justify-content-between mb-3">
+          <div>
+            <h5 class="fw-bold mb-1">{{ group.name }}</h5>
+            <p class="text-muted small mb-0">{{ group.description|default:t.group_description_ph|truncatechars:80 }}</p>
+          </div>
+          <span class="rounded-circle d-flex align-items-center justify-content-center"
+                style="width:40px;height:40px;background:{{ group.color }}22;color:{{ group.color }};font-size:1.1rem;flex-shrink:0">
+            <i class="bi bi-water"></i>
+          </span>
+        </div>
+        <div class="d-flex gap-3 text-muted small">
+          <span><i class="bi bi-people me-1"></i>{{ group.memberships.count }} {{ t.members }}</span>
+          <span><i class="bi bi-calendar3 me-1"></i>{{ group.recurring_sessions.count }} {{ t.sessions }}</span>
+        </div>
+        <div class="d-flex mt-3">
+          {% for m in group.get_members|slice:":6" %}{% if m.active %}
+          <div title="{{ m.swimmer.full_name }}"
+               class="d-flex align-items-center justify-content-center rounded-circle"
+               style="width:28px;height:28px;background:{{ group.color }};color:#fff;font-size:.65rem;font-weight:700;margin-right:-6px;border:2px solid #0f172a">
+            {{ m.swimmer.initials }}
+          </div>
+          {% endif %}{% endfor %}
+          {% with total=group.memberships.count %}{% if total > 6 %}
+          <div class="d-flex align-items-center justify-content-center rounded-circle"
+               style="width:28px;height:28px;background:#334155;color:#94a3b8;font-size:.65rem;margin-right:-6px;border:2px solid #0f172a">
+            +{{ total|add:"-6" }}
+          </div>
+          {% endif %}{% endwith %}
+        </div>
+      </div>
+    </a>
+  </div>
+  {% empty %}
+  <div class="col-12 text-center py-5 text-muted">
+    <i class="bi bi-people d-block mb-2" style="font-size:2.5rem"></i>
+    <p>{{ t.no_groups }}</p>
+    {% if user.is_authenticated and user.profile.is_admin %}
+    <a href="{% url 'group_create' %}" class="btn btn-primary rounded-pill">{{ t.btn_create_group }}</a>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

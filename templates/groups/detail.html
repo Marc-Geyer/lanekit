@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% block title %}{{ group.name }}{% endblock %}
+
+{% block content %}
+<div class="mb-3 d-flex align-items-center gap-2">
+  <a href="{% url 'group_list' %}" class="btn btn-sm btn-outline-secondary rounded-pill">
+    <i class="bi bi-arrow-left me-1"></i>{{ t.btn_back }}
+  </a>
+  {% if is_trainer %}
+  <a href="{% url 'group_edit' group.pk %}" class="btn btn-sm btn-outline-primary rounded-pill ms-auto">
+    <i class="bi bi-pencil me-1"></i>{{ t.btn_edit_group }}
+  </a>
+  {% endif %}
+</div>
+
+<div class="sc-card p-4 mb-4" style="border-left:4px solid {{ group.color }}">
+  <div class="d-flex align-items-center gap-3">
+    <div class="d-flex align-items-center justify-content-center rounded-circle"
+         style="width:56px;height:56px;background:{{ group.color }}22;color:{{ group.color }};font-size:1.4rem;flex-shrink:0">
+      <i class="bi bi-water"></i>
+    </div>
+    <div>
+      <h3 class="fw-bold mb-1" style="font-family:'Syne',sans-serif">{{ group.name }}</h3>
+      <p class="text-muted mb-0">{{ group.description|default:t.group_description_ph }}</p>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- Members -->
+  <div class="col-lg-6">
+    <div class="sc-card p-4 h-100">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h5 class="fw-bold mb-0"><i class="bi bi-people text-primary me-2"></i>{{ t.section_members }}</h5>
+        <span class="badge bg-secondary rounded-pill">{{ memberships|length }}</span>
+      </div>
+
+      {% for m in memberships %}{% if m.active %}
+      <div class="d-flex align-items-center gap-3 py-2 border-bottom" style="border-color:#334155!important">
+        <div class="sc-avatar-sm">{{ m.swimmer.initials }}</div>
+        <div class="flex-grow-1">
+          <a href="{% url 'swimmer_detail' m.swimmer.pk %}" class="fw-medium text-decoration-none text-light">
+            {{ m.swimmer.full_name }}
+          </a>
+          <div>
+            <span class="badge {% if m.role == 'trainer' %}bg-warning text-dark{% else %}bg-secondary{% endif %} rounded-pill" style="font-size:.68rem">
+              {% if m.role == 'trainer' %}<i class="bi bi-star-fill me-1"></i>{{ t.role_trainer }}{% else %}{{ t.role_swimmer }}{% endif %}
+            </span>
+          </div>
+        </div>
+        {% if is_trainer %}
+        <form method="post" action="{% url 'membership_remove' group.pk m.swimmer.pk %}"
+              onsubmit="return confirm(UI_STRINGS.confirmRemoveMember)">
+          {% csrf_token %}
+          <button class="btn btn-xs btn-outline-danger p-1" style="line-height:1">
+            <i class="bi bi-person-dash" style="font-size:.75rem"></i>
+          </button>
+        </form>
+        {% endif %}
+      </div>
+      {% endif %}{% empty %}
+      <p class="text-muted small text-center py-3">{{ t.no_members_yet }}</p>
+      {% endfor %}
+
+      {% if is_trainer %}
+      <div class="mt-3 pt-2">
+        <h6 class="fw-semibold mb-2 small text-muted">{{ t.add_member_heading }}</h6>
+        <form method="post" action="{% url 'membership_add' group.pk %}" class="d-flex gap-2 flex-wrap">
+          {% csrf_token %}
+          <select name="swimmer" class="form-select form-select-sm bg-transparent border-secondary text-light flex-grow-1">
+            {% for s in member_form.swimmer.field.queryset %}
+            <option value="{{ s.pk }}">{{ s.full_name }}</option>
+            {% endfor %}
+          </select>
+          <select name="role" class="form-select form-select-sm bg-transparent border-secondary text-light" style="max-width:140px">
+            <option value="swimmer">{{ t.role_swimmer }}</option>
+            <option value="trainer">{{ t.role_trainer }}</option>
+          </select>
+          <button class="btn btn-primary btn-sm rounded-pill px-3">
+            <i class="bi bi-plus-lg"></i> {{ t.btn_add_member }}
+          </button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Recurring Sessions -->
+  <div class="col-lg-6">
+    <div class="sc-card p-4 h-100">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h5 class="fw-bold mb-0"><i class="bi bi-calendar-week text-primary me-2"></i>{{ t.section_sessions }}</h5>
+        {% if is_trainer %}
+        <a href="{% url 'recurring_session_create' group.pk %}" class="btn btn-sm btn-outline-primary rounded-pill">
+          <i class="bi bi-plus-lg"></i> {{ t.btn_add_session }}
+        </a>
+        {% endif %}
+      </div>
+
+      {% for session in sessions %}
+      <div class="d-flex align-items-start gap-3 py-2 border-bottom" style="border-color:#334155!important">
+        <div class="text-center" style="min-width:48px">
+          <div class="fw-bold" style="color:{{ group.color }}">{{ session.get_day_of_week_display|slice:":2" }}</div>
+          <div class="text-muted" style="font-size:.72rem">{{ session.start_time|time:"H:i" }}</div>
+        </div>
+        <div class="flex-grow-1">
+          <div class="fw-medium small">{{ session.location }}</div>
+          <div class="text-muted" style="font-size:.75rem">
+            {{ session.start_time|time:"H:i" }} – {{ session.end_time|time:"H:i" }}
+            &nbsp;·&nbsp;{{ session.duration_minutes }} {{ t.min }}
+          </div>
+          {% if session.valid_until %}
+          <div class="text-warning" style="font-size:.72rem">
+            <i class="bi bi-calendar-check me-1"></i>{{ t.until }} {{ session.valid_until|date:"d.m.Y" }}
+          </div>
+          {% endif %}
+        </div>
+        {% if is_trainer %}
+        <a href="{% url 'recurring_session_edit' session.pk %}" class="btn btn-xs btn-outline-secondary p-1" style="line-height:1">
+          <i class="bi bi-pencil" style="font-size:.7rem"></i>
+        </a>
+        {% endif %}
+      </div>
+      {% empty %}
+      <p class="text-muted small text-center py-3">{{ t.no_sessions_yet }}</p>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,109 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# LaneKit – nginx site config
+# ${DOMAIN} is substituted at container startup from the DOMAIN env variable.
+# ─────────────────────────────────────────────────────────────────────────────
+
+upstream lanekit_app {
+    server app:8000;
+    keepalive 32;
+}
+
+# ── Rate limiting zones ───────────────────────────────────────────────────────
+limit_req_zone $binary_remote_addr zone=login:10m rate=10r/m;
+
+# ── HTTP → HTTPS redirect + ACME challenge ────────────────────────────────────
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN} www.${DOMAIN};
+
+    # Certbot webroot challenge (must be reachable over plain HTTP)
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    # Everything else: permanent redirect to HTTPS
+    location / {
+        return 301 https://${DOMAIN}$request_uri;
+    }
+}
+
+# ── HTTPS ─────────────────────────────────────────────────────────────────────
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2  on;
+    server_name ${DOMAIN};
+
+    # ── TLS certificates (written by certbot) ────────────────────────────────
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+
+    # Modern TLS configuration
+    ssl_protocols             TLSv1.2 TLSv1.3;
+    ssl_ciphers               ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache         shared:SSL:10m;
+    ssl_session_timeout       1d;
+    ssl_session_tickets       off;
+
+    # ── Security headers ─────────────────────────────────────────────────────
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+    add_header X-Frame-Options           DENY                                            always;
+    add_header X-Content-Type-Options    nosniff                                         always;
+    add_header Referrer-Policy           "strict-origin-when-cross-origin"               always;
+
+    # ── Upload size ──────────────────────────────────────────────────────────
+    client_max_body_size 20M;
+
+    # ── Static files – served directly from the named volume ─────────────────
+    location /static/ {
+        alias /app/staticfiles/;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+
+    # ── User-uploaded media ───────────────────────────────────────────────────
+    location /media/ {
+        alias /app/media/;
+        expires 7d;
+        add_header Cache-Control "public";
+    }
+
+    # ── WebSocket connections ─────────────────────────────────────────────────
+    location /ws/ {
+        proxy_pass         http://lanekit_app;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade    $http_upgrade;
+        proxy_set_header   Connection "upgrade";
+        proxy_set_header   Host       $host;
+        proxy_set_header   X-Real-IP  $remote_addr;
+        proxy_cache_bypass $http_upgrade;
+        # Keep WebSocket connections alive during long training sessions
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+
+    # ── Login endpoint – rate-limited ─────────────────────────────────────────
+    location /accounts/login/ {
+        limit_req zone=login burst=5 nodelay;
+        proxy_pass         http://lanekit_app;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+
+    # ── Main Django application ───────────────────────────────────────────────
+    location / {
+        proxy_pass         http://lanekit_app;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_redirect     off;
+        proxy_connect_timeout 60s;
+        proxy_read_timeout    60s;
+    }
+}
