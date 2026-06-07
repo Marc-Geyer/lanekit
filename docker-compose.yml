@@ -14,7 +14,7 @@ services:
 
   app:
     build:
-      context: ../lanekit(1)/swimmingclub
+      context: .
       dockerfile: Dockerfile
     # Override CMD to use Django's auto-reloading ASGI dev server
     command: >

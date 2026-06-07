@@ -20,7 +20,9 @@ venv/
 env/
 
 # Docker files (not needed inside image)
-docker/
+# docker/app/ IS needed (contains entrypoint.sh copied by the Dockerfile).
+docker/nginx/
+docker/certbot/
 docker-compose*.yml
 Dockerfile
 

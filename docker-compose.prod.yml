@@ -15,7 +15,7 @@ services:
   # ── Django / Daphne ASGI ───────────────────────────────────────────────────
   app:
     build:
-      context: ../lanekit(1)/swimmingclub
+      context: .
       dockerfile: Dockerfile
     command: >
       daphne -b 0.0.0.0 -p 8000
