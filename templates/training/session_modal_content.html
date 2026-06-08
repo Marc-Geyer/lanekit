@@ -1,18 +1,20 @@
 {% load static %}
 <div class="row g-3 mb-4">
-  <div class="col-md-6">
+  <div class="col-md-{% if is_trainer %}6{% else %}12{% endif %}">
     <div class="sc-card p-3 h-100">
       <div class="d-flex align-items-center gap-3 mb-2">
         <span class="badge rounded-pill px-3 py-2"
               style="background:{{ recurring.group.color }}22;color:{{ recurring.group.color }};border:1px solid {{ recurring.group.color }}55;font-size:.9rem">
           {{ recurring.group.name }}
         </span>
-        {% if instance %}
-        <span class="badge bg-success-subtle text-success rounded-pill">
-          <i class="bi bi-check-circle me-1"></i>{{ t.session_open }}
-        </span>
-        {% else %}
-        <span class="badge bg-secondary rounded-pill">{{ t.session_planned }}</span>
+        {% if is_trainer %}
+          {% if instance %}
+          <span class="badge bg-success-subtle text-success rounded-pill">
+            <i class="bi bi-check-circle me-1"></i>{{ t.session_open }}
+          </span>
+          {% else %}
+          <span class="badge bg-secondary rounded-pill">{{ t.session_planned }}</span>
+          {% endif %}
         {% endif %}
       </div>
       <h6 class="fw-semibold mb-1">
@@ -26,6 +28,7 @@
       </p>
     </div>
   </div>
+  {% if is_trainer %}
   <div class="col-md-6">
     {% if is_trainer and instance %}
     <div class="sc-card p-3 h-100">
@@ -63,9 +66,10 @@
     </div>
     {% endif %}
   </div>
+  {% endif %}
 </div>
 
-{% if instance %}
+{% if instance and is_trainer%}
 <div class="row g-3">
   <!-- Training Plan -->
   <div class="col-lg-6">
