@@ -25,9 +25,20 @@ def login_view(request):
     form = StyledAuthForm(data=request.POST or None)
     if request.method == 'POST' and form.is_valid():
         login(request, form.get_user())
+        # Check if User has trainer status and assign it
+        user = User.objects.get(pk=form.get_user().pk)
+        check_trainer_status(user)
         return redirect(request.GET.get('next', 'calendar'))
     return render(request, 'accounts/login.html', {'form': form})
 
+def check_trainer_status(user: User):
+    # check if user is trainer in some group
+    if not Swimmer.objects.filter(user=user).values('is_trainer')[0]:
+        return
+    # Don't overwrite admin status
+    if not user.profile.role == UserProfile.ROLE_ADMIN:
+        user.profile.role == UserProfile.ROLE_TRAINER
+        user.profile.save()
 
 def logout_view(request):
     logout(request)
@@ -114,6 +125,8 @@ def activate_view(request, uidb64, token):
             person.save()
 
             login(request, user)
+
+            check_trainer_status(user)
             messages.success(request, tr(request, 'msg_activ_successfull'))
         else:
             user.delete()
