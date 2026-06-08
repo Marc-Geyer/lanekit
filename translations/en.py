@@ -118,6 +118,17 @@ STRINGS = {
     'joined':                   'Joined',
     'role_admin':               'Administrator',
     'edit_user':                'Edit User',
+    'activate_account':         'Activate Your Account',
+    'activate_subtitle':        'Please check your emails',
+    'activation_email':         """Hello,
+    
+Welcome to LaneKit! Please click the link below to activate your account:
+{scheme}://{host}{url}
+
+Thank you,
+Your LineKit Team""",
+    'activation_send':          "We've sent a verification link to your email address.",
+    'activation_failed':        'Something went wrong during your account activation. Please contact an administrator.',
 
     # ── Exception / Holiday ───────────────────────────────────────────────────
     'exception_title':          'Add Exception / Holiday',
@@ -136,6 +147,8 @@ STRINGS = {
 
     # ── Flash messages (used via  tr(request, 'msg_…') in Python views) ───────
     'msg_profile_updated':      'Profile updated.',
+    'msg_activ_successfull':    'Account activated successfully. Connected to your user profile.',
+    'msg_activ_failed':         'Account rejected. No matching profile found. Please ensure you used the correct email address',
     'msg_swimmer_updated':      'Swimmer updated.',
     'msg_swimmer_added':        '{name} has been added.',
     'msg_swimmer_deactivated':  '{name} deactivated.',
@@ -148,5 +161,5 @@ STRINGS = {
     'msg_exception_saved':      'Exception for {date} saved.',
     'msg_no_permission':        'Permission denied.',
     'msg_user_updated':         'User updated.',
-    'group_description_ph':        'No description.',
+    'group_description_ph':     'No description.',
 }

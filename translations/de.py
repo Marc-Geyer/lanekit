@@ -118,6 +118,18 @@ STRINGS = {
     'joined':                   'Beigetreten',
     'role_admin':               'Administrator',
     'edit_user':                'Benutzer bearbeiten',
+    'activate_account':         'Konto aktivieren',
+    'activate_subtitle':        'Bitte überprüfen Sie Ihre E-Mails',
+    'activation_email':         """Hallo,
+
+Willkommen bei LaneKit! Bitte klicken Sie auf den untenstehenden Link, um Ihr Konto zu aktivieren:
+{scheme}://{host}{url}
+
+Vielen Dank,
+Ihr LaneKit-Team""",
+    'activation_send':          'Wir haben einen Bestätigungslink an Ihre E-Mail-Adresse gesendet.',
+    'activation_failed':        'Bei der Aktivierung Ihres Kontos ist ein Fehler aufgetreten. Bitte wenden Sie sich an einen Administrator.',
+
 
     # ── Ausnahme / Feiertag ───────────────────────────────────────────────────
     'exception_title':          'Ausnahme / Feiertag eintragen',
@@ -136,6 +148,8 @@ STRINGS = {
 
     # ── Flash-Nachrichten (in Python-Views via tr() verwendet) ────────────────
     'msg_profile_updated':      'Profil aktualisiert.',
+    'msg_activ_successfull':    'Konto erfolgreich aktiviert. Mit Ihrem Benutzerprofil verbunden.',
+    'msg_activ_failed':         'Konto abgelehnt. Kein passendes Profil gefunden. Bitte stellen Sie sicher, dass Sie die richtige E-Mail-Adresse verwendet haben.',
     'msg_swimmer_updated':      'Schwimmer aktualisiert.',
     'msg_swimmer_added':        '{name} wurde hinzugefügt.',
     'msg_swimmer_deactivated':  '{name} deaktiviert.',
