@@ -3,6 +3,8 @@ from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+from swimmers.models import Swimmer
+
 
 class UserProfile(models.Model):
     ROLE_ADMIN = 'admin'
@@ -56,3 +58,14 @@ def create_user_profile(sender, instance, created, **kwargs):
 def save_user_profile(sender, instance, **kwargs):
     if hasattr(instance, 'profile'):
         instance.profile.save()
+
+
+@receiver(post_save, sender=UserProfile)
+def update_user_profile(sender, instance, **kwargs):
+    if instance.user is not None:
+        person = Swimmer.objects.get(user=instance.user)
+        person.first_name = instance.user.first_name
+        person.last_name = instance.user.last_name
+        # TODO verified email change
+        person.phone = instance.phone
+        person.save()
