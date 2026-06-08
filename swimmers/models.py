@@ -2,9 +2,24 @@ from django.db import models
 from django.contrib.auth.models import User
 
 
+
+class SwimmerManager(models.Manager):
+    def get_queryset(self):
+        from groups.models import GroupMembership
+        return super().get_queryset().annotate(
+            is_trainer=models.Exists(
+                GroupMembership.objects.filter(
+                    swimmer_id=models.OuterRef("id"),
+                    role=GroupMembership.ROLE_TRAINER,
+                )
+            )
+        )
+
 class Swimmer(models.Model):
     """A person who participates in training sessions.
     May be linked to a User account, or exist as a standalone contact record."""
+
+    objects = SwimmerManager()
 
     user = models.OneToOneField(
         User, on_delete=models.SET_NULL, null=True, blank=True, related_name='swimmer'

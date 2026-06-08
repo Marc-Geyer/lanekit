@@ -13,6 +13,7 @@ def swimmer_list_view(request):
     group_id = request.GET.get('group', '')
     active_only = request.GET.get('active', '1') == '1'
     swimmers = Swimmer.objects.prefetch_related('groupmembership_set__group')
+
     if active_only:
         swimmers = swimmers.filter(active=True)
     if q:
@@ -21,13 +22,21 @@ def swimmer_list_view(request):
             Q(email__icontains=q) | Q(phone__icontains=q)
         )
     if group_id:
-        swimmers = swimmers.filter(groupmembership__group_id=group_id)
+        swimmers = swimmers.filter(groupmembership_set__group_id=group_id)
+    if not request.user.is_authenticated:
+        swimmers = swimmers.filter(is_trainer=True)
+
     from groups.models import Group
     groups = Group.objects.filter(active=True).order_by('name')
-    return render(request, 'swimmers/list.html', {
-        'swimmers': swimmers, 'q': q, 'groups': groups,
-        'selected_group': group_id, 'active_only': active_only,
-    })
+
+    context = {
+        'swimmers': swimmers,
+        'q': q,
+        'groups': groups,
+        'selected_group': group_id,
+        'active_only': active_only,
+    }
+    return render(request, 'swimmers/list.html', context )
 
 
 @login_required
