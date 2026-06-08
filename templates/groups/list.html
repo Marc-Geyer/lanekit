@@ -34,7 +34,8 @@
         </div>
         <div class="d-flex mt-3">
           {% for m in group.get_members|slice:":6" %}{% if m.active %}
-          <div title="{{ m.swimmer.full_name }}"
+          <div
+              {% if user.is_authenticated and user.profile.is_trainer %} title="{{ m.swimmer.full_name }}" {% endif %}
                class="d-flex align-items-center justify-content-center rounded-circle"
                style="width:28px;height:28px;background:{{ group.color }};color:#fff;font-size:.65rem;font-weight:700;margin-right:-6px;border:2px solid #0f172a">
             {{ m.swimmer.initials }}
