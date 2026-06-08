@@ -213,7 +213,12 @@ def session_modal_view(request, session_id, session_date):
         plan_entries = list(instance.plan_entries.all())
         attendances = list(instance.attendances.select_related('swimmer', 'excuse_token'))
 
-    return render(request, 'training/session_modal_content.html', {
+    # Render to string so we can bundle the HTML with metadata in a single
+    # JSON response. calendar.js reads instance_id and is_trainer directly
+    # from the JSON — this avoids the innerHTML <script> execution problem
+    # where injected script tags are silently ignored by the browser.
+    from django.template.loader import render_to_string
+    html = render_to_string('training/session_modal_content.html', {
         'recurring': recurring,
         'instance': instance,
         'session_date': session_date_obj,
@@ -221,6 +226,12 @@ def session_modal_view(request, session_id, session_date):
         'attendances': attendances,
         'is_trainer': is_trainer,
         'created': created,
+    }, request=request)
+
+    return JsonResponse({
+        'html': html,
+        'instance_id': instance.pk if instance else None,
+        'is_trainer': is_trainer,
     })
 
 

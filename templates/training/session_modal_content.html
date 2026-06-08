@@ -197,10 +197,5 @@
 </div>
 {% endif %}
 
-<script>
-window.SESSION_INSTANCE_ID = {{ instance.id }};
-window.SESSION_IS_TRAINER  = {{ is_trainer|yesno:"true,false" }};
-window.SESSION_RECURRING_ID = {{ recurring.id }};
-window.SESSION_DATE = '{{ session_date|date:"Y-m-d" }}';
-</script>
+
 {% endif %}

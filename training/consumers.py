@@ -39,6 +39,7 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
         data = content.get('data', {})
 
         if action == 'update_attendance':
+
             result = await self.db_update_attendance(data)
             await self.channel_layer.group_send(self.room_group, {
                 'type': 'broadcast_attendance',

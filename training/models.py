@@ -166,7 +166,7 @@ class Attendance(models.Model):
 
     class Meta:
         unique_together = ('session', 'swimmer')
-        ordering = ['swimmer__last_name', 'swimmer__first_name']
+        ordering = ['swimmer__groupmembership_set__role','swimmer__last_name', 'swimmer__first_name']
 
     def __str__(self):
         return f'{self.swimmer} – {self.session.date}: {self.get_status_display()}'
