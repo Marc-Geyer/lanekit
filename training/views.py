@@ -4,10 +4,8 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.views.generic import TemplateView
 from django.http import JsonResponse
-from django.views.decorators.http import require_POST
 from django.contrib import messages
 from django.db.models import Q
-from django.utils import timezone
 from translations.helpers import tr
 
 from .models import (

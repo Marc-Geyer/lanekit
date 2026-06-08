@@ -9,7 +9,7 @@ from .forms import SwimmerForm
 
 
 def swimmer_list_view(request):
-    q = request.GET.get('q', '')
+    q = request.GET.get('q', '').split(' ')
     group_id = request.GET.get('group', '')
     active_only = request.GET.get('active', '1') == '1'
     swimmers = Swimmer.objects.prefetch_related('groupmembership_set__group')
@@ -17,10 +17,12 @@ def swimmer_list_view(request):
     if active_only:
         swimmers = swimmers.filter(active=True)
     if q:
-        swimmers = swimmers.filter(
-            Q(first_name__icontains=q) | Q(last_name__icontains=q) |
-            Q(email__icontains=q) | Q(phone__icontains=q)
-        )
+        for a in q:
+            swimmers = swimmers.filter(
+                Q(first_name__icontains=a) | Q(last_name__icontains=a) |
+                Q(email__icontains=a) | Q(phone__icontains=a) |
+                Q(groupmembership_set__group__name=a)
+            )
     if group_id:
         swimmers = swimmers.filter(groupmembership_set__group_id=group_id)
     if not request.user.is_authenticated:
@@ -31,7 +33,7 @@ def swimmer_list_view(request):
 
     context = {
         'swimmers': swimmers,
-        'q': q,
+        'q': ' '.join(q),
         'groups': groups,
         'selected_group': group_id,
         'active_only': active_only,
