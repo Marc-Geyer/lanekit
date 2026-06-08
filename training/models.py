@@ -10,6 +10,32 @@ WEEKDAYS = [
     (3, 'Donnerstag'), (4, 'Freitag'), (5, 'Samstag'), (6, 'Sonntag'),
 ]
 
+class Location(models.Model):
+    TYPE_50M = '50m_Pool'
+    TYPE_25M = '25m_Pool'
+    TYPE_ATHLETIC = 'athletic'
+    TYPE_OTHER = 'other'
+
+    TYPE_CHOICES = [
+        (TYPE_50M, '50m Schwimmbecken'),
+        (TYPE_25M, '25m Schwimmbecken'),
+        (TYPE_ATHLETIC, 'Sport Halle'),
+        (TYPE_OTHER, 'other'),
+    ]
+    name = models.CharField()
+    type = models.CharField(choices=TYPE_CHOICES, max_length=10)
+    city = models.CharField(max_length=200)
+    postal_code = models.CharField(max_length=5, blank=True)
+    street_address = models.TextField()
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+    def address(self):
+        return f"{self.street_address}, {self.postal_code} {self.city}"
 
 class RecurringSession(models.Model):
     """A weekly recurring training slot for a group."""
@@ -17,7 +43,7 @@ class RecurringSession(models.Model):
     day_of_week = models.IntegerField(choices=WEEKDAYS)
     start_time = models.TimeField()
     end_time = models.TimeField()
-    location = models.CharField(max_length=200)
+    location = models.ForeignKey(Location, null=True, on_delete=models.SET_NULL, related_name='recurring_sessions')
     valid_from = models.DateField()
     valid_until = models.DateField(null=True, blank=True)
     active = models.BooleanField(default=True)
