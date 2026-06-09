@@ -51,12 +51,14 @@
             <i class="bi bi-people-fill"></i> {{ t.nav_groups }}
           </a>
         </li>
+        {% if user.is_authenticated %}
         <li class="nav-item">
           <a class="nav-link nav-pill {% if 'swimmer' in request.resolver_match.url_name %}active{% endif %}"
              href="{% url 'swimmer_list' %}">
             <i class="bi bi-person-badge"></i> {{ t.nav_people }}
           </a>
         </li>
+        {% endif %}
         {% if user.is_authenticated and user.profile.is_trainer %}
         <li class="nav-item">
           <a class="nav-link nav-pill" href="{% url 'exception_create' %}">

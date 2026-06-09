@@ -7,7 +7,7 @@ from translations.helpers import tr
 from .models import Swimmer
 from .forms import SwimmerForm
 
-
+@login_required
 def swimmer_list_view(request):
     q = request.GET.get('q', '').split(' ')
     group_id = request.GET.get('group', '')
@@ -25,7 +25,7 @@ def swimmer_list_view(request):
             )
     if group_id:
         swimmers = swimmers.filter(groupmembership_set__group_id=group_id)
-    if not request.user.is_authenticated:
+    if not request.user.profile.is_trainer:
         swimmers = swimmers.filter(is_trainer=True)
 
     from groups.models import Group
