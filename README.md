@@ -8,13 +8,33 @@ A self-hosted Django application for managing swimming groups, training sessions
 
 ## Contents
 
+- [Features](#features)
 - [Branding](#branding--organisation-name)
 - [Tech stack](#tech-stack)
 - [Development with Docker](#development-with-docker)
 - [Production deployment](#production-deployment)
 - [Running without Docker](#running-without-docker)
+- [Translation system](#translation-system)
+- [Access control](#access-control)
+- [WebSocket + fallback](#websocket--polling-fallback)
 - [Key URLs](#key-urls)
 - [How it works](#how-it-works)
+
+---
+
+## Features
+
+| Area | What it does |
+|---|---|
+| **Calendar** | FullCalendar view of all recurring sessions; exceptions shown in red; click to open detail modal |
+| **Session modal** | Trainer starts session, live-edits training plan and attendance via WebSocket |
+| **WebSocket sync** | Multiple trainers edit simultaneously; 3-retry reconnect + HTTP polling fallback if WS drops |
+| **Groups** | Create groups with a colour, manage members (swimmer / trainer roles), configure recurring slots |
+| **People** | Search/filter all swimmers, view/edit profile, emergency contacts |
+| **Excuse tokens** | Generate a shareable one-time URL so a swimmer can self-excuse without logging in |
+| **Multilingual** | 🇬🇧 English · 🇩🇪 Deutsch · 🇺🇦 Українська · 🇸🇦 العربية (RTL) — switchable per user in the navbar |
+| **User accounts** | Django-auth based with extended profile (admin / trainer / swimmer roles) |
+| **Exceptions** | Mark a date as cancelled for specific sessions or all sessions (holidays) |
 
 ---
 
@@ -42,17 +62,17 @@ ORGANISATION_NAME=SC Neptune 1921
 | Backend | Django 4.2, Django Channels 4 (ASGI) |
 | WebSockets | Daphne + channels-redis |
 | Database | PostgreSQL 16 |
-| Cache / Channel layer | Redis 7 |
+| Cache / Channel layer | Redis 7 (redis-py **4.x** — see note below) |
 | Reverse proxy | Nginx 1.27 |
 | TLS certificates | Let's Encrypt via Certbot |
 | Frontend | Bootstrap 5.3, FullCalendar 6, SortableJS |
 | Container runtime | Docker + Docker Compose |
 
+> **Redis version note:** `redis-py` is pinned to `<5.0`. Version 5+ defaults to the RESP3 protocol which causes `TimeoutError` in channels-redis 4.x subscriptions. RESP2 (4.x) is stable and fully supported.
+
 ---
 
 ## Development with Docker
-
-The dev stack hot-reloads Python files, exposes PostgreSQL and Redis ports for inspection, and needs zero manual setup beyond Docker being installed.
 
 ### 1 — Prerequisites
 
@@ -64,22 +84,21 @@ The dev stack hot-reloads Python files, exposes PostgreSQL and Redis ports for i
 cp .env.example .env
 ```
 
-Edit `.env`. For development these are the only lines you need to change:
+Minimal changes for development:
 
 ```dotenv
-ORGANISATION_NAME=My Club          # shown in the navbar
-DEBUG=True                         # keep True for dev
-# everything else can stay as-is
+ORGANISATION_NAME=My Club
+DEBUG=True
 ```
 
 ### 3 — Start the stack
 
 ```bash
-docker compose up          # add -d to run in the background
+docker compose up
 ```
 
 On first boot the entrypoint will:
-1. Wait for PostgreSQL to accept connections
+1. Wait for PostgreSQL and Redis to accept connections
 2. Run `manage.py migrate` automatically
 3. Create the superuser defined in `.env` (`admin` / `admin` by default)
 
@@ -88,23 +107,12 @@ The app is now at **http://localhost:8000**
 ### 4 — Day-to-day commands
 
 ```bash
-# Tail logs
 docker compose logs -f app
-
-# Open a Django shell
 docker compose exec app python manage.py shell
-
-# Create a new migration after changing a model
 docker compose exec app python manage.py makemigrations
-
-# Run tests
 docker compose exec app python manage.py test
-
-# Stop everything (data is preserved in named volumes)
-docker compose down
-
-# Destroy volumes too (full reset)
-docker compose down -v
+docker compose down        # preserves data
+docker compose down -v     # full reset
 ```
 
 ---
@@ -114,204 +122,181 @@ docker compose down -v
 ### Requirements
 
 - A Linux server (Ubuntu 22.04 LTS recommended)
-- Docker Engine + Docker Compose plugin installed
-- A domain name with an **A record pointing to the server's public IP**
-- Ports **80** and **443** open in the firewall
+- Docker Engine + Docker Compose plugin
+- A domain name with an A record pointing to the server's public IP
+- Ports **80** and **443** open
 
-### Step 1 — Install Docker on the server
+### Step 1 — Install Docker
 
 ```bash
 curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER   # then log out and back in
+sudo usermod -aG docker $USER
 ```
 
-### Step 2 — Clone the repository
+### Step 2 — Clone and configure
 
 ```bash
-git clone https://github.com/your-org/lanekit.git
+git clone https://github.com/Marc-Geyer/lanekit.git
 cd lanekit
-```
-
-### Step 3 — Configure environment
-
-```bash
 cp .env.example .env
-nano .env    # or your preferred editor
+nano .env
 ```
 
-Fill in **all** values, paying special attention to:
+Key values to set:
 
 ```dotenv
-# Your public domain (DNS must already point here)
 DOMAIN=lanekit.myclub.de
-
-# A strong random string – generate one with:
-#   python3 -c "import secrets; print(secrets.token_urlsafe(64))"
-SECRET_KEY=<long-random-string>
-
-# Your club name
+SECRET_KEY=<long-random-string>   # python3 -c "import secrets; print(secrets.token_urlsafe(64))"
 ORGANISATION_NAME=SC Neptune 1921
-
-# Database credentials (choose something strong)
 DB_PASSWORD=<strong-password>
-
-# First-boot superuser
 DJANGO_SUPERUSER_USERNAME=admin
 DJANGO_SUPERUSER_PASSWORD=<strong-password>
-
-# Let's Encrypt contact e-mail
 CERTBOT_EMAIL=you@myclub.de
-
-# IMPORTANT: test with staging first, then switch to real cert
-# Staging (browser warning, unlimited retries):
-CERTBOT_STAGING_FLAG=--staging
-# Production (real trusted cert) – set this AFTER staging works:
-# CERTBOT_STAGING_FLAG=
+CERTBOT_STAGING_FLAG=--staging    # test with staging first
 ```
 
-### Step 4 — Run the certificate init script (once only)
-
-This script:
-1. Creates a temporary self-signed cert so nginx can start
-2. Starts nginx
-3. Requests a real certificate from Let's Encrypt via the HTTP challenge
-4. Reloads nginx with the real cert
-5. Brings up the full stack
+### Step 3 — First-time TLS certificate
 
 ```bash
 chmod +x docker/certbot/init-letsencrypt.sh
 ./docker/certbot/init-letsencrypt.sh
 ```
 
-**Test with staging first** (`CERTBOT_STAGING_FLAG=--staging` in `.env`). When the site loads correctly (ignore the browser certificate warning), switch to a real certificate:
-
-```bash
-# 1. Edit .env:  CERTBOT_STAGING_FLAG=   (empty – remove the flag)
-# 2. Re-run the init script to get a trusted cert:
-./docker/certbot/init-letsencrypt.sh
-```
-
-Your site is now live at **https://lanekit.myclub.de** 🎉
-
-### Step 5 — Remove first-boot superuser credentials
-
-Once you have logged in and verified the admin account works, remove those lines from `.env` so they are not re-applied on container restarts:
+Test with staging first (browser shows cert warning — that's fine). When it loads correctly:
 
 ```dotenv
-# Remove or comment out:
+# .env: remove the staging flag
+CERTBOT_STAGING_FLAG=
+```
+
+Re-run the init script to get a trusted certificate. Site is live at **https://lanekit.myclub.de** 🎉
+
+### Step 4 — Remove first-boot credentials
+
+After confirming the admin account works, remove from `.env`:
+
+```dotenv
 # DJANGO_SUPERUSER_USERNAME=
 # DJANGO_SUPERUSER_PASSWORD=
 # DJANGO_SUPERUSER_EMAIL=
 ```
 
-Then restart the app container:
-
-```bash
-docker compose -f docker-compose.prod.yml up -d app
-```
-
----
+Then: `docker compose -f docker-compose.prod.yml up -d app`
 
 ### Certificate renewal
 
-Certbot runs inside its own container and automatically attempts renewal every 12 hours. Let's Encrypt certificates are valid for 90 days; certbot renews them ~30 days before expiry. Nginx reloads its config every 12 hours (via a container-internal cron job) to pick up any newly issued certificates — no manual intervention is required.
-
-To manually force a renewal:
+Certbot renews automatically every 12 h. Nginx reloads every 12 h via internal cron to pick up new certs — no manual intervention needed.
 
 ```bash
+# Force manual renewal
 docker compose -f docker-compose.prod.yml run --rm certbot certbot renew --force-renewal
 docker compose -f docker-compose.prod.yml exec nginx nginx -s reload
 ```
 
----
-
-### Production day-to-day commands
+### Production day-to-day
 
 ```bash
 COMPOSE="docker compose -f docker-compose.prod.yml"
-
-# View all logs
 $COMPOSE logs -f
-
-# View app logs only
-$COMPOSE logs -f app
-
-# Apply new migrations after an update
 $COMPOSE exec app python manage.py migrate
-
-# Open a Django shell
-$COMPOSE exec app python manage.py shell
-
-# Pull latest code and redeploy
-git pull
-$COMPOSE build app
-$COMPOSE up -d app
-
-# Full restart
-$COMPOSE restart
-
-# Stop (data preserved)
-$COMPOSE down
-
-# Check certificate expiry
+git pull && $COMPOSE build app && $COMPOSE up -d app
 $COMPOSE run --rm certbot certbot certificates
 ```
 
----
-
-### Production architecture
+### Architecture
 
 ```
-Internet
-   │  HTTPS :443 / HTTP :80
-   ▼
-┌──────────────────────────────────────────┐
-│               nginx container            │
-│  • TLS termination (Let's Encrypt)       │
-│  • Serves /static/ and /media/ directly  │
-│  • Rate-limits /accounts/login/          │
-│  • Proxies /ws/ with WebSocket upgrade   │
-│  • Proxies everything else to Daphne     │
-└──────┬───────────────────────────────────┘
-       │ HTTP :8000 (internal Docker network)
-       ▼
-┌──────────────────────────────────────────┐
-│           app container (Daphne)         │
-│  • Django 4.2 / Channels 4 (ASGI)        │
-│  • Handles HTTP requests + WebSockets    │
-└──────┬───────────────┬────────────────────┘
-       │               │
-       ▼               ▼
-┌────────────┐  ┌─────────────────────────┐
-│ PostgreSQL │  │  Redis                  │
-│ (db)       │  │  WebSocket channel layer│
-└────────────┘  └─────────────────────────┘
+Internet  :443/:80
+    ↓
+┌─────────────────────────────┐
+│  nginx (TLS, static files,  │
+│  rate-limit login, WS proxy)│
+└──────────┬──────────────────┘
+           │ :8000
+    ┌──────▼────────────────┐
+    │  app (Daphne / ASGI)  │
+    └──────┬──────────┬─────┘
+           ↓          ↓
+     PostgreSQL     Redis
+                 (WS channel layer)
 
-certbot container: loops every 12 h, renews cert when needed
-nginx:             reloads every 12 h via internal cron
+certbot: renews cert every 12 h
+nginx:   reloads config every 12 h
 ```
 
 ---
 
 ## Running Without Docker
 
-For local development without Docker (SQLite, in-memory channels):
-
 ```bash
-python -m venv venv
-source venv/bin/activate
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 python manage.py migrate
 python manage.py createsuperuser
-python manage.py runserver          # Channels overrides this with ASGI support
+ORGANISATION_NAME="My Club" python manage.py runserver
 ```
 
-Set `ORGANISATION_NAME` in your shell:
+---
 
-```bash
-export ORGANISATION_NAME="My Club"
-python manage.py runserver
+## Translation System
+
+LaneKit uses a **custom lightweight i18n system** — not Django's gettext. All strings live in one file per language with no compilation step required.
+
 ```
+translations/
+  registry.py   ← THE place to register a new language (one import + one tuple)
+  helpers.py    ← tr(request, 'msg_key') for use in Python views
+  en.py         English
+  de.py         German (default)
+  uk.py         Ukrainian
+  ar.py         Arabic (RTL — Bootstrap RTL CSS loaded automatically)
+```
+
+**In templates:** `{{ t.some_key }}` (no `{% load %}` tag needed)  
+**In views:** `from translations.helpers import tr` → `messages.success(request, tr(request, 'msg_profile_updated'))`  
+**Language switching:** navbar flag dropdown → `GET /set-language/?lang=uk`
+
+### Adding a new language
+
+1. Create `translations/xx.py` — copy `en.py`, translate the values
+2. In `translations/registry.py` add one import and one tuple to `LANGUAGES`
+3. If RTL, add the code to `RTL_LANGUAGES`
+
+### Missing key behaviour
+
+`TranslationDict` catches missing keys at runtime without crashing:
+- **DEBUG mode:** renders `⚠ [key_name]` visibly on the page
+- **Production:** renders the bare key name (always readable)
+- **Always:** logs `WARNING translations: Missing translation key 'key_name'` to the console
+
+---
+
+## Access Control
+
+| Role | Capabilities |
+|---|---|
+| **Anonymous** | View calendar (read-only), view group list, use excuse token links |
+| **Swimmer** | All of above + view/edit own swimmer profile, filter calendar to own sessions |
+| **Trainer** | All of above + start sessions, edit training plan, mark attendance, manage group members, add exceptions |
+| **Admin** | Full access including user management and group creation |
+
+Role is set on `UserProfile.role`. Trainer status for a specific group is additionally controlled by `GroupMembership.role`.
+
+---
+
+## WebSocket + Polling Fallback
+
+The session modal connects to `ws[s]://host/ws/session/<instance_id>/` on open.
+
+**Connection lifecycle:**
+1. Connect → send `init` event with current attendance + plan state
+2. Every change (attendance, plan entry, notes, reorder) → saved to DB + broadcast to all connected clients
+3. On disconnect: retry up to **3 times** (2 s / 5 s / 10 s backoff)
+4. After 3 failures: fall back to **HTTP polling** every 5 s via `GET /training/session/<id>/state/`
+5. In polling mode: attendance writes use `POST /training/session/<id>/attendance/` directly
+
+**Status indicator** (dot in modal corner):  
+🟢 `connected` · 🟡 `connecting` · 🔵 `polling` · 🔴 `error`
 
 ---
 
@@ -320,25 +305,28 @@ python manage.py runserver
 | URL | Description |
 |---|---|
 | `/` | Calendar (main page) |
-| `/training/events/?start=…&end=…` | Calendar event JSON API (FullCalendar feed) |
-| `/training/session/<id>/<date>/` | Session modal content – GET=view, POST=create instance |
-| `/ws/session/<instance_id>/` | WebSocket endpoint (live attendance + training plan) |
+| `/training/events/?start=…&end=…` | Calendar event JSON API |
+| `/training/session/<id>/<date>/` | Session modal — returns `{html, instance_id, is_trainer}` JSON |
+| `/training/session/<id>/state/` | Polling fallback state endpoint |
+| `/training/session/<id>/attendance/` | REST attendance update (polling fallback) |
+| `/ws/session/<instance_id>/` | WebSocket endpoint |
+| `/set-language/?lang=xx` | Switch UI language |
 | `/groups/` | Group list |
 | `/swimmers/` | People search |
 | `/accounts/login/` | Login |
-| `/excuse/<uuid>/` | Self-excuse link (no login needed) |
+| `/excuse/<uuid>/` | Self-excuse link (no login required) |
 | `/admin/` | Django admin |
 
 ---
 
 ## How It Works
 
-**Calendar** — `/training/events/` iterates the date range, applies exceptions (shown in red), checks for instances (full opacity) vs planned slots (slightly transparent), and returns FullCalendar-compatible JSON. Logged-out users see everything read-only; logged-in users can toggle "My Sessions" to filter to their groups.
+**Calendar** — `/training/events/` iterates the date range, applies exceptions (red), checks for instances (full opacity) vs planned slots (transparent), returns FullCalendar JSON. Logged-out users see everything read-only; logged-in users can toggle "My Sessions."
 
-**Session Modal** — Clicking a calendar event loads the modal via an AJAX GET. If no instance exists yet, trainers see a "Start Session" button that POSTs to create the instance and pre-populate an attendance row for each group member.
+**Session Modal** — Click a calendar event → AJAX GET returns JSON `{html, instance_id, is_trainer}`. If trainer + instance exists → WebSocket connects immediately (instance_id comes from JSON, not injected script tags which browsers never execute via innerHTML).
 
-**WebSocket Live Sync** — `SessionConsumer` verifies the connecting user is a trainer of that group, then joins a per-session channel group. Every action (attendance toggle, plan entry CRUD, drag-reorder, notes autosave) is saved to the database and broadcast to every connected client. The coloured dot in the modal corner shows the connection state.
+**WebSocket Live Sync** — `SessionConsumer` verifies the connecting user is a trainer of that group, joins `session_<id>` channel group. Every action is saved to DB and broadcast to all connected clients.
 
-**Excuse Tokens** — A trainer generates a shareable one-time URL via `POST /training/excuse/generate/`. The swimmer visits the link, confirms, and their attendance is automatically set to "excused" — no login required.
+**Excuse Tokens** — Trainer generates a one-time URL via `POST /training/excuse/generate/`. Swimmer visits, confirms, attendance set to "excused" — no login required.
 
-**TLS Renewal** — Certbot runs `certbot renew` in a loop inside its own container. nginx picks up new certificates every 12 hours via an internal cron that runs `nginx -s reload`.
+**TLS Renewal** — Certbot loops every 12 h inside its container. Nginx reloads every 12 h via internal cron to pick up new certificates.
