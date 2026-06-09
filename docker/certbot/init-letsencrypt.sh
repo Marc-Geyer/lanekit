@@ -57,11 +57,12 @@ mkdir -p ./docker/certbot/www
 # ── 2. Create a temporary self-signed certificate ────────────────────────────
 # nginx won't start without something at the cert paths; we replace it next.
 echo "▶ Generating temporary self-signed certificate for $DOMAIN…"
+echo "▶ Generating temporary self-signed certificate for $DOMAIN…"
 $COMPOSE run --rm --no-deps --entrypoint \
-  "openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
+  "sh -c 'mkdir -p /etc/letsencrypt/live/${DOMAIN} && openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
    -keyout /etc/letsencrypt/live/${DOMAIN}/privkey.pem \
    -out    /etc/letsencrypt/live/${DOMAIN}/fullchain.pem \
-   -subj /CN=localhost" \
+   -subj /CN=localhost'" \
   certbot
 echo " ✓ Temporary certificate created."
 
