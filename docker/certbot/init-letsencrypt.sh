@@ -31,7 +31,7 @@ set +a
 
 DOMAIN="${DOMAIN:?DOMAIN must be set in .env}"
 EMAIL="${CERTBOT_EMAIL:?CERTBOT_EMAIL must be set in .env}"
-STAGING_FLAG="${CERTBOT_STAGING_FLAG:---staging}"   # default to staging for safety
+STAGING_FLAG="${CERTBOT_STAGING_FLAG---staging}"   # default to staging for safety
 
 COMPOSE="docker compose -f docker-compose.prod.yml"
 
