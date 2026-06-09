@@ -63,7 +63,9 @@ def save_user_profile(sender, instance, **kwargs):
 @receiver(post_save, sender=UserProfile)
 def update_user_profile(sender, instance, **kwargs):
     if instance.user is not None:
-        person = Swimmer.objects.get(user=instance.user)
+        person = Swimmer.objects.filter(user=instance.user).first()
+        if person is None:
+            return
         person.first_name = instance.user.first_name
         person.last_name = instance.user.last_name
         # TODO verified email change

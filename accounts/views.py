@@ -33,7 +33,10 @@ def login_view(request):
 
 def check_trainer_status(user: User):
     # check if user is trainer in some group
-    if not Swimmer.objects.filter(user=user).values('is_trainer')[0]:
+    swimmer = Swimmer.objects.filter(user=user)
+    if not swimmer.exists():
+        return
+    if not swimmer.values('is_trainer')[0]:
         return
     # Don't overwrite admin status
     if not user.profile.role == UserProfile.ROLE_ADMIN:

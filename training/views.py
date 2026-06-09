@@ -111,7 +111,7 @@ def calendar_events_api(request):
                         'type': 'exception',
                         'group': session.group.name,
                         'reason': exc.reason,
-                        'location': session.location,
+                        'location': str(session.location),
                     },
                 })
                 continue
@@ -134,7 +134,7 @@ def calendar_events_api(request):
                         'session_id': session.id,
                         'date': str(current),
                         'group': session.group.name,
-                        'location': session.location,
+                        'location': str(session.location),
                     },
                 })
             else:
@@ -152,7 +152,7 @@ def calendar_events_api(request):
                         'session_id': session.id,
                         'date': str(current),
                         'group': session.group.name,
-                        'location': session.location,
+                        'location': str(session.location),
                     },
                 })
         current += timedelta(days=1)

@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     RecurringSession, SessionException, SessionInstance,
-    TrainingPlanEntry, Attendance, ExcuseToken
+    TrainingPlanEntry, Attendance, ExcuseToken, Location
 )
 
 
@@ -46,3 +46,8 @@ class AttendanceAdmin(admin.ModelAdmin):
     list_display = ('swimmer', 'session', 'status', 'marked_by', 'marked_at')
     list_filter = ('status',)
     search_fields = ('swimmer__first_name', 'swimmer__last_name')
+
+@admin.register(Location)
+class LocationAdmin(admin.ModelAdmin):
+    list_display = ('name', 'type', 'city', 'postal_code', 'street_address')
+    list_filter = ('type',)

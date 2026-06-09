@@ -24,7 +24,10 @@ function initSessionWebSocket(instanceId) {
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
     switch (msg.type) {
-      case 'init':              handleInit(msg.data);              break;
+      case 'init':
+        handleInit(msg.data);
+        window.SESSION_IS_TRAINER = msg.trainer;
+        break;
       case 'attendance_update': handleAttendanceUpdate(msg.data);  break;
       case 'plan_add':          handlePlanAdd(msg.data);           break;
       case 'plan_update':       handlePlanUpdate(msg.data);        break;
@@ -43,7 +46,10 @@ function wsSend(action, data) {
 /* ── Attendance ───────────────────────────────────────────────────────────── */
 
 window.updateAttendance = function (swimmerId, status) {
+  console.log(swimmerId, status);
+  console.log(window.SESSION_IS_TRAINER)
   if (!window.SESSION_IS_TRAINER) return;
+  console.log(swimmerId, status);
   wsSend('update_attendance', { swimmer_id: swimmerId, status });
   applyAttendanceUpdate({ swimmer_id: swimmerId, status }); // optimistic
 };

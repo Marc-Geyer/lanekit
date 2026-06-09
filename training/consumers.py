@@ -25,7 +25,7 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
 
         # Send current state on connect
         state = await self.get_session_state(self.session_id)
-        await self.send_json({'type': 'init', 'data': state})
+        await self.send_json({'type': 'init', 'data': state, 'trainer': self.is_trainer})
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.room_group, self.channel_name)
