@@ -27,6 +27,7 @@ services:
       DEBUG: "False"
       SECRET_KEY: ${SECRET_KEY}
       DOMAIN: ${DOMAIN}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS}
       ORGANISATION_NAME: ${ORGANISATION_NAME}
       DB_HOST: db
       DB_PORT: "5432"
