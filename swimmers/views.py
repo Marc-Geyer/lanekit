@@ -5,7 +5,7 @@ from django.db.models import Q
 from django.http import JsonResponse
 from translations.helpers import tr
 from .models import Swimmer
-from .forms import SwimmerForm
+from .forms import SwimmerForm, SwimmerCreateForm
 
 @login_required
 def swimmer_list_view(request):
@@ -38,7 +38,7 @@ def swimmer_list_view(request):
         'selected_group': group_id,
         'active_only': active_only,
     }
-    return render(request, 'swimmers/list.html', context )
+    return render(request, 'swimmers/list.html', context)
 
 
 @login_required
@@ -52,11 +52,17 @@ def swimmer_detail_view(request, pk):
         form.save()
         messages.success(request, tr(request, 'msg_swimmer_updated'))
         return redirect('swimmer_detail', pk=pk)
-    from groups.models import GroupMembership
+    from groups.models import GroupMembership, Group
     memberships = GroupMembership.objects.filter(swimmer=swimmer).select_related('group')
+    # Groups this swimmer is not yet actively a member of — used by the add-membership form
+    active_group_ids = memberships.filter(active=True).values_list('group_id', flat=True)
+    available_groups = Group.objects.filter(active=True).exclude(pk__in=active_group_ids).order_by('name')
     return render(request, 'swimmers/detail.html', {
         'swimmer': swimmer, 'form': form,
         'memberships': memberships, 'can_edit': can_edit,
+        'available_groups': available_groups,
+        'role_swimmer': GroupMembership.ROLE_SWIMMER,
+        'role_trainer': GroupMembership.ROLE_TRAINER,
     })
 
 
@@ -65,12 +71,68 @@ def swimmer_create_view(request):
     if not request.user.profile.is_trainer:
         messages.error(request, tr(request, 'msg_no_permission'))
         return redirect('swimmer_list')
-    form = SwimmerForm(request.POST or None)
+    form = SwimmerCreateForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
         swimmer = form.save()
+
+        # Optional group assignment — same get_or_create pattern as membership_add_view
+        group = form.cleaned_data.get('group')
+        if group:
+            from groups.models import GroupMembership
+            role = form.cleaned_data.get('group_role') or GroupMembership.ROLE_SWIMMER
+            membership, created = GroupMembership.objects.get_or_create(
+                group=group,
+                swimmer=swimmer,
+                defaults={'role': role},
+            )
+            if not created:
+                membership.role = role
+                membership.active = True
+                membership.save()
+
         messages.success(request, tr(request, 'msg_swimmer_added', name=swimmer.full_name))
         return redirect('swimmer_detail', pk=swimmer.pk)
     return render(request, 'swimmers/form.html', {'form': form})
+
+
+@login_required
+def swimmer_membership_add_view(request, pk):
+    """Add a group membership from the swimmer detail page.
+    Mirrors membership_add_view in groups/ but redirects back to swimmer_detail."""
+    if not request.user.profile.is_trainer:
+        messages.error(request, tr(request, 'msg_no_permission'))
+        return redirect('swimmer_detail', pk=pk)
+    swimmer = get_object_or_404(Swimmer, pk=pk)
+    if request.method == 'POST':
+        from groups.models import Group, GroupMembership
+        group_id = request.POST.get('group')
+        role = request.POST.get('role', GroupMembership.ROLE_SWIMMER)
+        group = get_object_or_404(Group, pk=group_id)
+        membership, created = GroupMembership.objects.get_or_create(
+            group=group,
+            swimmer=swimmer,
+            defaults={'role': role},
+        )
+        if not created:
+            membership.role = role
+            membership.active = True
+            membership.save()
+        messages.success(request, tr(request, 'msg_member_added', name=swimmer.full_name))
+    return redirect('swimmer_detail', pk=pk)
+
+
+@login_required
+def swimmer_membership_remove_view(request, pk, group_pk):
+    """Remove a group membership from the swimmer detail page.
+    Mirrors membership_remove_view in groups/ but redirects back to swimmer_detail."""
+    if not request.user.profile.is_trainer:
+        messages.error(request, tr(request, 'msg_no_permission'))
+        return redirect('swimmer_detail', pk=pk)
+    if request.method == 'POST':
+        from groups.models import GroupMembership
+        GroupMembership.objects.filter(group_id=group_pk, swimmer_id=pk).update(active=False)
+        messages.success(request, tr(request, 'msg_member_removed'))
+    return redirect('swimmer_detail', pk=pk)
 
 
 @login_required

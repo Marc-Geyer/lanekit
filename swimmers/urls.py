@@ -6,5 +6,7 @@ urlpatterns = [
     path('new/', views.swimmer_create_view, name='swimmer_create'),
     path('<int:pk>/', views.swimmer_detail_view, name='swimmer_detail'),
     path('<int:pk>/delete/', views.swimmer_delete_view, name='swimmer_delete'),
+    path('<int:pk>/groups/add/', views.swimmer_membership_add_view, name='swimmer_membership_add'),
+    path('<int:pk>/groups/<int:group_pk>/remove/', views.swimmer_membership_remove_view, name='swimmer_membership_remove'),
     path('autocomplete/', views.swimmer_autocomplete, name='swimmer_autocomplete'),
 ]

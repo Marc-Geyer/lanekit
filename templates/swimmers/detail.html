@@ -24,17 +24,52 @@
 
     <div class="sc-card p-3">
       <h6 class="fw-semibold mb-3"><i class="bi bi-people text-primary me-2"></i>{{ t.section_groups }}</h6>
+
       {% for m in memberships %}{% if m.active %}
-      <a href="{% url 'group_detail' m.group.pk %}" class="text-decoration-none d-block mb-2">
-        <div class="d-flex align-items-center gap-2">
-          <span class="group-swatch" style="background:{{ m.group.color }}"></span>
-          <span class="small">{{ m.group.name }}</span>
-          {% if m.is_trainer %}<span class="badge bg-warning text-dark ms-auto" style="font-size:.65rem">{{ t.role_trainer }}</span>{% endif %}
-        </div>
-      </a>
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <a href="{% url 'group_detail' m.group.pk %}" class="text-decoration-none flex-grow-1">
+          <div class="d-flex align-items-center gap-2">
+            <span class="group-swatch" style="background:{{ m.group.color }}"></span>
+            <span class="small">{{ m.group.name }}</span>
+            {% if m.is_trainer %}<span class="badge bg-warning text-dark ms-auto" style="font-size:.65rem">{{ t.role_trainer }}</span>{% endif %}
+          </div>
+        </a>
+        {% if can_edit %}
+        <form method="post" action="{% url 'swimmer_membership_remove' swimmer.pk m.group.pk %}"
+              onsubmit="return confirm(UI_STRINGS.confirmRemoveMember)">
+          {% csrf_token %}
+          <button class="btn p-0 border-0 text-danger opacity-50 opacity-hover-100" style="line-height:1;background:none">
+            <i class="bi bi-x-lg" style="font-size:.75rem"></i>
+          </button>
+        </form>
+        {% endif %}
+      </div>
       {% endif %}{% empty %}
       <p class="text-muted small mb-0">{{ t.no_groups_assigned }}</p>
       {% endfor %}
+
+      {% if can_edit and available_groups %}
+      <div class="mt-3 pt-2 border-top" style="border-color:#334155!important">
+        <p class="text-muted small mb-2">{{ t.add_member_heading }}</p>
+        <form method="post" action="{% url 'swimmer_membership_add' swimmer.pk %}">
+          {% csrf_token %}
+          <select name="group" class="form-select form-select-sm bg-transparent border-secondary text-light mb-2">
+            {% for g in available_groups %}
+            <option value="{{ g.pk }}">{{ g.name }}</option>
+            {% endfor %}
+          </select>
+          <div class="d-flex gap-2">
+            <select name="role" class="form-select form-select-sm bg-transparent border-secondary text-light">
+              <option value="{{ role_swimmer }}">{{ t.role_swimmer }}</option>
+              <option value="{{ role_trainer }}">{{ t.role_trainer }}</option>
+            </select>
+            <button class="btn btn-primary btn-sm rounded-pill px-3 text-nowrap">
+              <i class="bi bi-plus-lg"></i>
+            </button>
+          </div>
+        </form>
+      </div>
+      {% endif %}
     </div>
   </div>
 
