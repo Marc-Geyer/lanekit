@@ -124,7 +124,7 @@ class TrainingPlanEntry(models.Model):
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default=CATEGORY_MAIN)
     description = models.TextField()
     distance = models.CharField(max_length=50, blank=True, help_text='e.g. 4×50m')
-    intensity = models.CharField(max_length=50, blank=True, help_text='e.g. Zone 2, Sprint')
+    intensity = models.CharField(max_length=50, blank=True, help_text='e.g. GA I, Sprint')
     rest_seconds = models.PositiveSmallIntegerField(null=True, blank=True, help_text='Rest in seconds')
 
     class Meta:
@@ -192,7 +192,7 @@ class Attendance(models.Model):
 
     class Meta:
         unique_together = ('session', 'swimmer')
-        ordering = ['swimmer__groupmembership_set__role','swimmer__last_name', 'swimmer__first_name']
+        ordering = ['swimmer__last_name', 'swimmer__first_name']
 
     def __str__(self):
         return f'{self.swimmer} – {self.session.date}: {self.get_status_display()}'

@@ -209,7 +209,11 @@ def session_modal_view(request, session_id, session_date):
     attendances = []
     if instance:
         plan_entries = list(instance.plan_entries.all())
-        attendances = list(instance.attendances.select_related('swimmer', 'excuse_token'))
+        attendances = list(
+            instance.attendances
+            .select_related('swimmer', 'excuse_token')
+            .distinct()
+        )
 
     # Render to string so we can bundle the HTML with metadata in a single
     # JSON response. calendar.js reads instance_id and is_trainer directly

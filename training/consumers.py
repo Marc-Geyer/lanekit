@@ -128,7 +128,12 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
             entries = list(TrainingPlanEntry.objects.filter(session=instance).values(
                 'id', 'order', 'category', 'description', 'distance', 'intensity', 'rest_seconds'
             ))
-            attendances = [a.to_dict() for a in Attendance.objects.filter(session=instance).select_related('swimmer', 'marked_by')]
+            attendances = [
+                a.to_dict()
+                for a in Attendance.objects.filter(session=instance)
+                .select_related('swimmer', 'marked_by')
+                .distinct()
+            ]
             return {
                 'session_id': instance.pk,
                 'trainer_notes': instance.trainer_notes,
