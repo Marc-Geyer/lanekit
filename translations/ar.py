@@ -35,6 +35,8 @@ STRINGS = {
     'session_wait':             'انتظر حتى يفتح مدربك الجلسة.',
     'section_plan':             'خطة التدريب',
     'section_attendance':       'الحضور',
+    'btn_sync_attendance':      'مزامنة',
+    'confirm_sync_attendance':  'إضافة أعضاء جدد وحذف الغائبين غير المعلّمين؟',
     'btn_add_entry':            'إضافة',
     'no_entries':               'لا توجد إدخالات بعد. انقر على «إضافة» للبدء.',
     'no_members':               'لا يوجد أعضاء.',

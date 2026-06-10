@@ -35,6 +35,8 @@ STRINGS = {
     'session_wait':             'Wait until your trainer opens this session.',
     'section_plan':             'Training Plan',
     'section_attendance':       'Attendance',
+    'btn_sync_attendance':      'Sync',
+    'confirm_sync_attendance':  'Add new members and remove unmarked inactive?',
     'btn_add_entry':            'Entry',
     'no_entries':               'No entries yet. Click "+ Entry" to begin.',
     'no_members':               'No members.',

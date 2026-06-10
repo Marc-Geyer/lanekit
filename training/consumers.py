@@ -80,6 +80,12 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
                 'type': 'broadcast_reorder',
                 'data': data,
             })
+        elif action == 'sync_attendance':
+            result = await self.db_sync_attendance()
+            await self.channel_layer.group_send(self.room_group, {
+                'type': 'broadcast_sync_attendance',
+                'data': result,
+            })
 
     # ── Channel layer event handlers ────────────────────────────────────────
     async def broadcast_attendance(self, event):
@@ -99,6 +105,9 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
 
     async def broadcast_reorder(self, event):
         await self.send_json({'type': 'plan_reorder', 'data': event['data']})
+
+    async def broadcast_sync_attendance(self, event):
+        await self.send_json({'type': 'sync_attendance', 'data': event['data']})
 
     # ── Database helpers (run in thread pool) ───────────────────────────────
     @database_sync_to_async
@@ -199,3 +208,42 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
     def db_update_notes(self, data):
         from training.models import SessionInstance
         SessionInstance.objects.filter(pk=self.session_id).update(trainer_notes=data.get('notes', ''))
+
+    @database_sync_to_async
+    def db_sync_attendance(self):
+        from training.models import SessionInstance, Attendance
+        from groups.models import GroupMembership
+
+        instance = SessionInstance.objects.select_related(
+            'recurring_session__group'
+        ).get(pk=self.session_id)
+        group = instance.recurring_session.group
+
+        # Active group member IDs right now
+        active_ids = set(
+            GroupMembership.objects.filter(group=group, active=True)
+            .values_list('swimmer_id', flat=True)
+        )
+
+        # Existing attendance rows for this session
+        existing = {
+            a.swimmer_id: a
+            for a in Attendance.objects.filter(session=instance)
+            .select_related('swimmer')
+        }
+
+        added = []
+        for sid in active_ids:
+            if sid not in existing:
+                from swimmers.models import Swimmer
+                swimmer = Swimmer.objects.get(pk=sid)
+                att = Attendance.objects.create(session=instance, swimmer=swimmer)
+                added.append(att.to_dict())
+
+        removed = []
+        for sid, att in existing.items():
+            if sid not in active_ids and att.status == Attendance.STATUS_UNKNOWN:
+                removed.append(sid)
+                att.delete()
+
+        return {'added': added, 'removed': removed}

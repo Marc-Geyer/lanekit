@@ -34,6 +34,7 @@ function initSessionWebSocket(instanceId) {
       case 'plan_delete':       handlePlanDelete(msg.data);        break;
       case 'plan_reorder':      handlePlanReorder(msg.data);       break;
       case 'notes_update':      handleNotesUpdate(msg.data);       break;
+      case 'sync_attendance':   handleSyncAttendance(msg.data);   break;
     }
   };
 }
@@ -78,6 +79,38 @@ function updateAttendanceCounts() {
   if (p) p.textContent = counts.present;
   if (a) a.textContent = counts.absent;
   if (e) e.textContent = counts.excused;
+}
+
+window.syncAttendance = function () {
+  if (!window.SESSION_IS_TRAINER) return;
+  if (!confirm(UI_STRINGS.confirmSyncAttendance)) return;
+  const btn = document.getElementById('syncAttBtn');
+  if (btn) { btn.disabled = true; btn.querySelector('i').className = 'bi bi-hourglass-split'; }
+  wsSend('sync_attendance', {});
+};
+
+function handleSyncAttendance(data) {
+  const btn = document.getElementById('syncAttBtn');
+  if (btn) { btn.disabled = false; btn.querySelector('i').className = 'bi bi-arrow-repeat'; }
+
+  const tbody = document.getElementById('attendanceTableBody');
+  if (!tbody) return;
+
+  // Remove rows for de-listed swimmers
+  (data.removed || []).forEach(sid => {
+    const row = document.getElementById(`att-row-${sid}`);
+    if (row) row.remove();
+  });
+
+  // Add rows for new members
+  (data.added || []).forEach(att => {
+    if (document.getElementById(`att-row-${att.swimmer_id}`)) return; // already present
+    const emptyRow = tbody.querySelector('td[colspan]')?.closest('tr');
+    if (emptyRow) emptyRow.remove();
+    tbody.insertAdjacentHTML('beforeend', renderAttendanceRowHTML(att));
+  });
+
+  updateAttendanceCounts();
 }
 
 /* ── Training Plan ────────────────────────────────────────────────────────── */
@@ -230,6 +263,27 @@ function renderPlanEntryHTML(entry) {
       </button>
     </div>` : ''}
   </div>`;
+}
+
+function renderAttendanceRowHTML(att) {
+  const sid = att.swimmer_id;
+  const statuses = ['present', 'absent', 'excused', 'unknown'];
+  const icons    = { present: 'check-lg', absent: 'x-lg', excused: 'shield-check', unknown: 'question-lg' };
+  const buttons  = statuses.map(s => `
+    <button class="status-btn${att.status === s ? ' active' : ''}"
+            data-status="${s}"
+            onclick="updateAttendance(${sid},'${s}')">
+      <i class="bi bi-${icons[s]}"></i>
+    </button>`).join('');
+
+  return `
+  <tr id="att-row-${sid}">
+    <td style="width:36px"><div class="sc-avatar-sm">${att.swimmer_initials}</div></td>
+    <td><div class="fw-medium small">${att.swimmer_name}</div></td>
+    <td class="text-end">
+      <div class="d-flex gap-1 justify-content-end flex-wrap">${buttons}</div>
+    </td>
+  </tr>`;
 }
 
 /* ── Sortable drag-and-drop for plan entries ──────────────────────────────── */

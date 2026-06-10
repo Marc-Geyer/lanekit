@@ -34,6 +34,8 @@ STRINGS = {
     'session_wait':             'Warte bis dein Trainer die Einheit öffnet.',
     'section_plan':             'Trainingsplan',
     'section_attendance':       'Anwesenheit',
+    'btn_sync_attendance':      'Abgleichen',
+    'confirm_sync_attendance':  'Neue Mitglieder hinzufügen und nicht markierte Inaktive entfernen?',
     'btn_add_entry':            'Eintrag',
     'no_entries':               'Noch keine Einträge. Klicke „+ Eintrag" um zu beginnen.',
     'no_members':               'Keine Mitglieder.',

@@ -122,6 +122,15 @@
     <div class="d-flex align-items-center justify-content-between mb-2">
       <h6 class="fw-bold mb-0"><i class="bi bi-person-check text-primary me-2"></i>{{ t.section_attendance }}</h6>
       <div class="d-flex gap-2 text-muted small">
+        {% if is_trainer %}
+        <button id="syncAttBtn"
+                class="btn btn-outline-secondary rounded-pill px-2"
+                style="font-size:.72rem;line-height:1.4;padding-top:.15rem;padding-bottom:.15rem"
+                onclick="syncAttendance()"
+                title="{{ t.btn_sync_attendance }}">
+          <i class="bi bi-arrow-repeat"></i> {{ t.btn_sync_attendance }}
+        </button>
+        {% endif %}
         <span title="{{ t.status_present }}"><i class="bi bi-circle-fill text-success"></i> <span id="countPresent">0</span></span>
         <span title="{{ t.status_absent }}"><i class="bi bi-circle-fill text-danger"></i> <span id="countAbsent">0</span></span>
         <span title="{{ t.status_excused }}"><i class="bi bi-circle-fill text-warning"></i> <span id="countExcused">0</span></span>
