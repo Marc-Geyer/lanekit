@@ -5,12 +5,11 @@ from django.contrib.auth.decorators import login_required
 from django.views.generic import TemplateView
 from django.http import JsonResponse
 from django.contrib import messages
-from django.db.models import Q
+from django.db.models import Q, OuterRef, Subquery
 from translations.helpers import tr
 
 from .models import (
-    RecurringSession, SessionException, SessionInstance,
-    TrainingPlanEntry, Attendance, ExcuseToken
+    RecurringSession, SessionException, SessionInstance, Attendance, ExcuseToken
 )
 from groups.models import Group, GroupMembership
 from swimmers.models import Swimmer
@@ -209,9 +208,24 @@ def session_modal_view(request, session_id, session_date):
     attendances = []
     if instance:
         plan_entries = list(instance.plan_entries.all())
+        role_subquery = (
+            GroupMembership.objects
+            .filter(
+                swimmer=OuterRef('swimmer'),
+                group=recurring.group,
+                active=True,
+            )
+            .values('role')[:1]
+        )
         attendances = list(
             instance.attendances
             .select_related('swimmer', 'excuse_token')
+            .annotate(group_role=Subquery(role_subquery))
+            .order_by(
+                '-group_role',
+                'swimmer__last_name',
+                'swimmer__first_name',
+            )
             .distinct()
         )
 

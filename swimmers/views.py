@@ -12,7 +12,7 @@ def swimmer_list_view(request):
     q = request.GET.get('q', '').split(' ')
     group_id = request.GET.get('group', '')
     active_only = request.GET.get('active', '1') == '1'
-    swimmers = Swimmer.objects.prefetch_related('groupmembership_set__group')
+    swimmers = Swimmer.objects.all()
 
     if active_only:
         swimmers = swimmers.filter(active=True)
@@ -30,6 +30,8 @@ def swimmer_list_view(request):
 
     from groups.models import Group
     groups = Group.objects.filter(active=True).order_by('name')
+
+    swimmers = swimmers.distinct()
 
     context = {
         'swimmers': swimmers,

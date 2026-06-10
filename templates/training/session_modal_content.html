@@ -143,8 +143,16 @@
           <tr id="att-row-{{ att.swimmer.id }}">
             <td style="width:36px"><div class="sc-avatar-sm">{{ att.swimmer.initials }}</div></td>
             <td>
-              <div class="fw-medium small">{{ att.swimmer.full_name }}</div>
-              {% if att.excuse_token %}<small class="text-warning"><i class="bi bi-check-circle me-1"></i>{{ t.status_excused }}</small>{% endif %}
+              <div class="d-flex flex-wrap gap-1 mt-1">
+                {% if att.group_role == 'trainer' %}
+                <span class="badge rounded-pill d-inline-flex align-items-center justify-content-center px-2 py-1"
+                      style="background:#FFD70022;color:#FFD700;border:1px solid #FFD70055;font-size:.68rem;">
+                  <i class="bi bi-star-fill"></i>
+                </span>
+                {% endif %}
+                <div class="fw-medium small">{{ att.swimmer.full_name }}</div>
+                {% if att.excuse_token %}<small class="text-warning"><i class="bi bi-check-circle me-1"></i>{{ t.status_excused }}</small>{% endif %}
+              </div>
             </td>
             <td class="text-end">
               {% if is_trainer %}
