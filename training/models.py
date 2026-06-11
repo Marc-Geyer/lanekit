@@ -126,6 +126,10 @@ class TrainingPlanEntry(models.Model):
     distance = models.CharField(max_length=50, blank=True, help_text='e.g. 4×50m')
     intensity = models.CharField(max_length=50, blank=True, help_text='e.g. GA I, Sprint')
     rest_seconds = models.PositiveSmallIntegerField(null=True, blank=True, help_text='Rest in seconds')
+    photo = models.ImageField(
+        upload_to='training_plans/%Y/%m/', blank=True, null=True,
+        help_text='Photo of a hand-written plan, e.g. taken poolside.'
+    )
 
     class Meta:
         ordering = ['order']
@@ -142,6 +146,7 @@ class TrainingPlanEntry(models.Model):
             'distance': self.distance,
             'intensity': self.intensity,
             'rest_seconds': self.rest_seconds,
+            'photo_url': self.photo.url if self.photo else None,
         }
 
 

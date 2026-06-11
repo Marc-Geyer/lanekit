@@ -9,10 +9,26 @@ from django.db.models import Q, OuterRef, Subquery
 from translations.helpers import tr
 
 from .models import (
-    RecurringSession, SessionException, SessionInstance, Attendance, ExcuseToken
+    RecurringSession, SessionException, SessionInstance, Attendance, ExcuseToken,
+    TrainingPlanEntry,
 )
 from groups.models import Group, GroupMembership
 from swimmers.models import Swimmer
+
+
+def _is_session_trainer(request, recurring_session):
+    """Return True if the current user may manage this recurring session's group."""
+    if not request.user.is_authenticated:
+        return False
+    return (
+        request.user.profile.is_admin or
+        GroupMembership.objects.filter(
+            group=recurring_session.group,
+            swimmer__user=request.user,
+            role=GroupMembership.ROLE_TRAINER,
+            active=True,
+        ).exists()
+    )
 
 
 # ── Calendar main view ───────────────────────────────────────────────────────
@@ -175,15 +191,7 @@ def session_modal_view(request, session_id, session_date):
 
     is_trainer = False
     if request.user.is_authenticated:
-        is_trainer = (
-            request.user.profile.is_admin or
-            GroupMembership.objects.filter(
-                group=recurring.group,
-                swimmer__user=request.user,
-                role=GroupMembership.ROLE_TRAINER,
-                active=True,
-            ).exists()
-        )
+        is_trainer = _is_session_trainer(request, recurring)
 
     # Auto-create instance when trainer opens the modal
     created = False
@@ -249,6 +257,94 @@ def session_modal_view(request, session_id, session_date):
         'instance_id': instance.pk if instance else None,
         'is_trainer': is_trainer,
     })
+
+
+# ── Session state polling / offline fallback ─────────────────────────────────
+# These mirror the WebSocket consumer's `init` payload and `update_attendance`
+# action. They exist so the session modal keeps working (read state every few
+# seconds, queue and replay attendance changes) when the WebSocket connection
+# drops — e.g. while a phone screen is locked.
+
+@login_required
+def session_state_api(request, instance_id):
+    """Return the same state payload the WebSocket sends on connect."""
+    instance = get_object_or_404(
+        SessionInstance.objects.select_related('recurring_session__group'), pk=instance_id
+    )
+    recurring = instance.recurring_session
+    is_trainer = _is_session_trainer(request, recurring)
+
+    entries = [e.to_dict() for e in instance.plan_entries.all()]
+    attendances = [
+        a.to_dict()
+        for a in instance.attendances.select_related('swimmer', 'marked_by').distinct()
+    ]
+    return JsonResponse({
+        'session_id': instance.pk,
+        'trainer_notes': instance.trainer_notes,
+        'plan_entries': entries,
+        'attendances': attendances,
+        'is_trainer': is_trainer,
+    })
+
+
+@login_required
+def session_attendance_update_api(request, instance_id):
+    """REST fallback for `update_attendance` when the WebSocket is unavailable."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+
+    instance = get_object_or_404(
+        SessionInstance.objects.select_related('recurring_session__group'), pk=instance_id
+    )
+    if not _is_session_trainer(request, instance.recurring_session):
+        return JsonResponse({'error': 'forbidden'}, status=403)
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse({'error': 'invalid json'}, status=400)
+
+    swimmer = get_object_or_404(Swimmer, pk=data.get('swimmer_id'))
+    att, _ = Attendance.objects.get_or_create(session=instance, swimmer=swimmer)
+    att.status = data.get('status', att.status)
+    att.notes = data.get('notes', att.notes)
+    att.marked_by = request.user
+    att.save()
+    return JsonResponse(att.to_dict())
+
+
+# ── Training plan entry photo ─────────────────────────────────────────────────
+
+@login_required
+def plan_entry_photo_view(request, entry_id):
+    """Upload (POST, multipart) or remove (DELETE) the photo for a plan entry."""
+    entry = get_object_or_404(
+        TrainingPlanEntry.objects.select_related('session__recurring_session__group'),
+        pk=entry_id,
+    )
+    recurring = entry.session.recurring_session
+    if not _is_session_trainer(request, recurring):
+        return JsonResponse({'error': 'forbidden'}, status=403)
+
+    if request.method == 'POST':
+        photo = request.FILES.get('photo')
+        if not photo:
+            return JsonResponse({'error': 'no file provided'}, status=400)
+        if entry.photo:
+            entry.photo.delete(save=False)
+        entry.photo = photo
+        entry.save(update_fields=['photo'])
+        return JsonResponse(entry.to_dict())
+
+    if request.method == 'DELETE':
+        if entry.photo:
+            entry.photo.delete(save=False)
+            entry.photo = None
+            entry.save(update_fields=['photo'])
+        return JsonResponse(entry.to_dict())
+
+    return JsonResponse({'error': 'method not allowed'}, status=405)
 
 
 # ── Excuse token ─────────────────────────────────────────────────────────────

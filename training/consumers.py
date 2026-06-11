@@ -87,6 +87,23 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
                 'data': result,
             })
 
+        elif action == 'photo_updated':
+            # Photo uploads/deletions go through a regular HTTP endpoint
+            # (binary data isn't sent over the JSON WebSocket). The client
+            # re-broadcasts the resulting entry dict so every connected
+            # device updates its view without re-querying the DB.
+            await self.channel_layer.group_send(self.room_group, {
+                'type': 'broadcast_plan_update',
+                'data': data,
+            })
+
+        elif action == 'mark_unknown_absent':
+            result = await self.db_mark_unknown_absent()
+            await self.channel_layer.group_send(self.room_group, {
+                'type': 'broadcast_bulk_attendance',
+                'data': result,
+            })
+
     # ── Channel layer event handlers ────────────────────────────────────────
     async def broadcast_attendance(self, event):
         await self.send_json({'type': 'attendance_update', 'data': event['data']})
@@ -108,6 +125,9 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
 
     async def broadcast_sync_attendance(self, event):
         await self.send_json({'type': 'sync_attendance', 'data': event['data']})
+
+    async def broadcast_bulk_attendance(self, event):
+        await self.send_json({'type': 'bulk_attendance_update', 'data': event['data']})
 
     # ── Database helpers (run in thread pool) ───────────────────────────────
     @database_sync_to_async
@@ -134,9 +154,9 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
         from training.models import SessionInstance, Attendance, TrainingPlanEntry
         try:
             instance = SessionInstance.objects.select_related('recurring_session__group').get(pk=session_id)
-            entries = list(TrainingPlanEntry.objects.filter(session=instance).values(
-                'id', 'order', 'category', 'description', 'distance', 'intensity', 'rest_seconds'
-            ))
+            entries = [
+                e.to_dict() for e in TrainingPlanEntry.objects.filter(session=instance)
+            ]
             attendances = [
                 a.to_dict()
                 for a in Attendance.objects.filter(session=instance)
@@ -208,6 +228,21 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
     def db_update_notes(self, data):
         from training.models import SessionInstance
         SessionInstance.objects.filter(pk=self.session_id).update(trainer_notes=data.get('notes', ''))
+
+    @database_sync_to_async
+    def db_mark_unknown_absent(self):
+        from training.models import SessionInstance, Attendance
+        from django.contrib.auth.models import User
+        session = SessionInstance.objects.get(pk=self.session_id)
+        user = User.objects.get(pk=self.scope['user'].pk)
+        qs = Attendance.objects.filter(session=session, status=Attendance.STATUS_UNKNOWN)
+        updated = []
+        for att in qs:
+            att.status = Attendance.STATUS_ABSENT
+            att.marked_by = user
+            att.save()
+            updated.append(att.to_dict())
+        return {'updated': updated}
 
     @database_sync_to_async
     def db_sync_attendance(self):

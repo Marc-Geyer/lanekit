@@ -34,6 +34,11 @@ document.addEventListener('DOMContentLoaded', function () {
     },
 
     eventClick: function (info) {
+      // Bootstrap tooltips use 'hover' as their trigger, but on touch devices
+      // a tap both shows the tooltip AND fires this click handler – and
+      // there's no following "mouseleave" to hide it again. Hide explicitly.
+      bootstrap.Tooltip.getInstance(info.el)?.hide();
+
       const props = info.event.extendedProps;
       if (props.type === 'exception') { showExceptionModal(props); return; }
       openSessionModal(props.session_id, props.date, props.instance_id);
@@ -46,7 +51,14 @@ document.addEventListener('DOMContentLoaded', function () {
         : `📍 ${props.location || ''}`;
       info.el.setAttribute('data-bs-toggle', 'tooltip');
       info.el.setAttribute('data-bs-title', label);
-      new bootstrap.Tooltip(info.el, { placement: 'top', trigger: 'hover' });
+      const tooltip = new bootstrap.Tooltip(info.el, { placement: 'top', trigger: 'hover' });
+
+      // Auto-fade the tooltip after a short delay – on touch devices it would
+      // otherwise stay open indefinitely once shown.
+      info.el.addEventListener('shown.bs.tooltip', () => {
+        clearTimeout(info.el._tooltipFadeTimer);
+        info.el._tooltipFadeTimer = setTimeout(() => tooltip.hide(), 2500);
+      });
     },
   });
 
@@ -129,10 +141,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Clean up when modal closes
   document.getElementById('sessionModal').addEventListener('hidden.bs.modal', () => {
-    if (window._sessionWS) {
-      window._sessionWS.close();
-      window._sessionWS = null;
-    }
+    closeSessionWebSocket();
   });
 
   // ── Helpers ───────────────────────────────────────────────────────────────

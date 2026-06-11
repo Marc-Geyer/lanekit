@@ -258,9 +258,26 @@ body {
 .ws-dot.connected   { background: var(--sc-success); box-shadow: 0 0 6px var(--sc-success); }
 .ws-dot.connecting  { background: var(--sc-warning); animation: pulse 1s infinite; }
 .ws-dot.error       { background: var(--sc-danger); }
+.ws-dot.polling     { background: var(--sc-warning); }
 
 @keyframes pulse {
   0%,100% { opacity:1; } 50% { opacity:.3; }
+}
+
+/* ── Training plan photo ── */
+.plan-entry-photo-thumb {
+  width: 56px; height: 56px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--sc-border);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.plan-entry-photo-editor-preview {
+  max-width: 100%;
+  max-height: 180px;
+  border-radius: 8px;
+  border: 1px solid var(--sc-border);
 }
 
 /* ── Swimmer cards ── */
