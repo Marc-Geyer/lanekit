@@ -145,7 +145,11 @@ Your LineKit Team""",
 
     # ── Exception / Holiday ───────────────────────────────────────────────────
     'exception_title':          'Add Exception / Holiday',
-    'exception_subtitle':       'Mark sessions as cancelled for a given date.',
+    'exception_subtitle':       'Mark sessions as cancelled – for a single day or a date range (e.g. holidays).',
+    'exception_date_label':     'From',
+    'exception_end_date_label': 'To (optional)',
+    'exception_end_date_hint':  'Leave empty for a single day.',
+    'exception_end_date_error': 'End date must be on or after the start date.',
 
     # ── Excuse token ──────────────────────────────────────────────────────────
     'excuse_title':             'Excuse from Training',

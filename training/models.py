@@ -65,11 +65,17 @@ class RecurringSession(models.Model):
 
 
 class SessionException(models.Model):
-    """A holiday or one-off cancellation that cancels one or more recurring sessions."""
-    date = models.DateField()
+    """A holiday or cancellation that cancels one or more recurring sessions
+    on a single date or across an inclusive date range."""
+    date = models.DateField(help_text='First (or only) day of the exception.')
+    end_date = models.DateField(
+        null=True, blank=True,
+        help_text='Optional last day of the exception (inclusive). '
+                   'Leave empty for a single-day exception.'
+    )
     affected_sessions = models.ManyToManyField(
         RecurringSession, related_name='exceptions', blank=True,
-        help_text='Leave empty to affect ALL sessions on this date.'
+        help_text='Leave empty to affect ALL sessions on this date / date range.'
     )
     reason = models.CharField(max_length=200)
     affects_all = models.BooleanField(
@@ -82,7 +88,36 @@ class SessionException(models.Model):
     class Meta:
         ordering = ['date']
 
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.end_date and self.end_date < self.date:
+            raise ValidationError({'end_date': 'End date must be on or after the start date.'})
+
+    @property
+    def effective_end_date(self):
+        """The last affected date – falls back to `date` for single-day exceptions."""
+        return self.end_date or self.date
+
+    @property
+    def is_range(self):
+        return bool(self.end_date and self.end_date != self.date)
+
+    def covers(self, day):
+        """Return True if `day` falls within this exception's date range (inclusive)."""
+        return self.date <= day <= self.effective_end_date
+
+    def date_range(self):
+        """Yield every date covered by this exception, inclusive."""
+        from datetime import timedelta
+        current = self.date
+        end = self.effective_end_date
+        while current <= end:
+            yield current
+            current += timedelta(days=1)
+
     def __str__(self):
+        if self.is_range:
+            return f'{self.date} – {self.end_date} – {self.reason}'
         return f'{self.date} – {self.reason}'
 
 

@@ -146,7 +146,11 @@ Ihr LaneKit-Team""",
 
     # ── Ausnahme / Feiertag ───────────────────────────────────────────────────
     'exception_title':          'Ausnahme / Feiertag eintragen',
-    'exception_subtitle':       'Markiere Termine als abgesagt für ein bestimmtes Datum.',
+    'exception_subtitle':       'Markiere Termine als abgesagt – für einen einzelnen Tag oder einen Zeitraum (z. B. Ferien).',
+    'exception_date_label':     'Von',
+    'exception_end_date_label': 'Bis (optional)',
+    'exception_end_date_hint':  'Leer lassen für einen einzelnen Tag.',
+    'exception_end_date_error': 'Das Enddatum muss am oder nach dem Startdatum liegen.',
 
     # ── Entschuldigungs-Token ─────────────────────────────────────────────────
     'excuse_title':             'Training entschuldigen',

@@ -24,7 +24,8 @@ class RecurringSessionAdmin(admin.ModelAdmin):
 
 @admin.register(SessionException)
 class SessionExceptionAdmin(admin.ModelAdmin):
-    list_display = ('date', 'reason', 'affects_all')
+    list_display = ('date', 'end_date', 'reason', 'affects_all')
+    list_filter = ('affects_all',)
     filter_horizontal = ('affected_sessions',)
 
 

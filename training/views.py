@@ -74,18 +74,25 @@ def calendar_events_api(request):
 
     # Build exception lookup: date -> {session_id -> exception}
     exceptions_qs = SessionException.objects.filter(
-        date__gte=start_date, date__lte=end_date
+        date__lte=end_date,
+    ).filter(
+        Q(end_date__gte=start_date) |
+        Q(end_date__isnull=True, date__gte=start_date)
     ).prefetch_related('affected_sessions')
     exception_map = {}  # {date: {session_id or 'all': exc}}
     for exc in exceptions_qs:
-        d = exc.date
-        if d not in exception_map:
-            exception_map[d] = {}
-        if exc.affects_all:
-            exception_map[d]['all'] = exc
-        else:
-            for s in exc.affected_sessions.all():
-                exception_map[d][s.id] = exc
+        overlap_start = max(exc.date, start_date)
+        overlap_end = min(exc.effective_end_date, end_date)
+        d = overlap_start
+        while d <= overlap_end:
+            if d not in exception_map:
+                exception_map[d] = {}
+            if exc.affects_all:
+                exception_map[d]['all'] = exc
+            else:
+                for s in exc.affected_sessions.all():
+                    exception_map[d][s.id] = exc
+            d += timedelta(days=1)
 
     # Build instance lookup: (session_id, date) -> instance
     instances_qs = SessionInstance.objects.filter(
@@ -458,12 +465,16 @@ def exception_create(request):
         messages.error(request, tr(request, 'msg_no_permission'))
         return redirect('calendar')
     from .forms import SessionExceptionForm
-    form = SessionExceptionForm(request.POST or None)
+    form = SessionExceptionForm(request.POST or None, request=request)
     if request.method == 'POST' and form.is_valid():
         exc = form.save(commit=False)
         exc.created_by = request.user
         exc.save()
         form.save_m2m()
-        messages.success(request, tr(request, 'msg_exception_saved', date=str(exc.date)))
+        if exc.is_range:
+            date_str = f'{exc.date:%d.%m.%Y} – {exc.end_date:%d.%m.%Y}'
+        else:
+            date_str = f'{exc.date:%d.%m.%Y}'
+        messages.success(request, tr(request, 'msg_exception_saved', date=date_str))
         return redirect('calendar')
     return render(request, 'training/exception_form.html', {'form': form})

@@ -19,7 +19,7 @@
       </div>
       <h6 class="fw-semibold mb-1">
         <i class="bi bi-calendar2-event text-primary me-2"></i>
-        {{ session_date|date:"l, d. F Y" }}
+        {{ session_date|date:"l, d.m.Y" }}
       </h6>
       <p class="mb-1 text-muted small">
         <i class="bi bi-clock me-1"></i>{{ recurring.start_time|time:"H:i" }} – {{ recurring.end_time|time:"H:i" }}
