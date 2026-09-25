@@ -210,6 +210,7 @@ def session_modal_view(request, session_id, session_date):
         )
         # Pre-populate attendance for all group members
         members = Swimmer.objects.filter(
+            active=True,
             groupmembership_set__group=recurring.group,
             groupmembership_set__active=True,
         )

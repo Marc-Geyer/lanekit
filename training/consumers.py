@@ -256,7 +256,7 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
 
         # Active group member IDs right now
         active_ids = set(
-            GroupMembership.objects.filter(group=group, active=True)
+            GroupMembership.objects.filter(group=group, active=True, swimmer__active=True)
             .values_list('swimmer_id', flat=True)
         )
 
