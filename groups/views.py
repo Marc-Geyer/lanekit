@@ -1,3 +1,4 @@
+from django.db.models import Count, Q
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -7,7 +8,13 @@ from .forms import GroupForm, MembershipForm
 
 
 def group_list_view(request):
-    groups = Group.objects.filter(active=True).prefetch_related('memberships__swimmer')
+    groups = Group.objects.filter(active=True).prefetch_related('memberships__swimmer').annotate(
+        active_member_count=Count(
+            'memberships',
+            filter=Q(memberships__active=True, memberships__swimmer__active=True)
+        ),
+    )
+
     return render(request, 'groups/list.html', {'groups': groups})
 
 

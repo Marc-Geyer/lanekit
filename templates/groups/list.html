@@ -29,25 +29,27 @@
           </span>
         </div>
         <div class="d-flex gap-3 text-muted small">
-          <span><i class="bi bi-people me-1"></i>{{ group.memberships.count }} {{ t.members }}</span>
+          <span><i class="bi bi-people me-1"></i>{{ group.active_member_count }} {{ t.members }}</span>
           <span><i class="bi bi-calendar3 me-1"></i>{{ group.recurring_sessions.count }} {{ t.sessions }}</span>
         </div>
-        <div class="d-flex mt-3">
-          {% for m in group.get_members|slice:":6" %}{% if m.active %}
-          <div
-              {% if user.is_authenticated and user.profile.is_trainer %} title="{{ m.swimmer.full_name }}" {% endif %}
-               class="d-flex align-items-center justify-content-center rounded-circle"
-               style="width:28px;height:28px;background:{{ group.color }};color:#fff;font-size:.65rem;font-weight:700;margin-right:-6px;border:2px solid #0f172a">
-            {{ m.swimmer.initials }}
+        {% if user and user.is_authenticated %}
+          <div class="d-flex mt-3">
+            {% for m in group.get_members|slice:":6" %}{% if m.active and m.swimmer.active %}
+              <div
+                  {% if user.is_authenticated and user.profile.is_trainer %} title="{{ m.swimmer.full_name }}" {% endif %}
+                   class="d-flex align-items-center justify-content-center rounded-circle"
+                   style="width:28px;height:28px;background:{{ group.color }};color:#fff;font-size:.65rem;font-weight:700;margin-right:-6px;border:2px solid #0f172a">
+                {{ m.swimmer.initials }}
+              </div>
+              {% endif %}{% endfor %}
+              {% with total=group.memberships.count %}{% if total > 6 %}
+              <div class="d-flex align-items-center justify-content-center rounded-circle"
+                   style="width:28px;height:28px;background:#334155;color:#94a3b8;font-size:.65rem;margin-right:-6px;border:2px solid #0f172a">
+                +{{ total|add:"-6" }}
+              </div>
+            {% endif %}{% endwith %}
           </div>
-          {% endif %}{% endfor %}
-          {% with total=group.memberships.count %}{% if total > 6 %}
-          <div class="d-flex align-items-center justify-content-center rounded-circle"
-               style="width:28px;height:28px;background:#334155;color:#94a3b8;font-size:.65rem;margin-right:-6px;border:2px solid #0f172a">
-            +{{ total|add:"-6" }}
-          </div>
-          {% endif %}{% endwith %}
-        </div>
+        {% endif %}
       </div>
     </a>
   </div>

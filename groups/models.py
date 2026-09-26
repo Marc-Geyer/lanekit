@@ -18,13 +18,13 @@ class Group(models.Model):
 
     def get_trainers(self):
         return GroupMembership.objects.filter(
-            group=self, role=GroupMembership.ROLE_TRAINER, active=True
+            group=self, role=GroupMembership.ROLE_TRAINER, active=True, swimmer__active=True
         ).select_related('swimmer')
 
     def get_members(self):
         return GroupMembership.objects.filter(
-            group=self, active=True
-        ).select_related('swimmer').order_by('role', 'swimmer__last_name')
+            group=self, active=True, swimmer__active=True,
+        ).select_related('swimmer').order_by('-role', 'swimmer__last_name')
 
 
 class GroupMembership(models.Model):
