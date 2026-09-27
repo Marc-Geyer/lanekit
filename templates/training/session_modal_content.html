@@ -78,59 +78,79 @@
 <div class="row g-3">
   <!-- Training Plan -->
   <div class="col-lg-6">
-    <div class="d-flex align-items-center justify-content-between mb-2">
-      <h6 class="fw-bold mb-0"><i class="bi bi-clipboard2-data text-primary me-2"></i>{{ t.section_plan }}</h6>
-      {% if is_trainer %}
-      <button class="btn btn-sm btn-outline-primary rounded-pill" onclick="addPlanEntry()">
-        <i class="bi bi-plus-lg"></i> {{ t.btn_add_entry }}
-      </button>
-      {% endif %}
+    <div class="d-flex align-items-center justify-content-between mb-2 section-collapse-header"
+         data-bs-toggle="collapse" data-bs-target="#planBody" role="button" aria-expanded="true">
+      <h6 class="fw-bold mb-0"><i class="bi bi-clipboard2-data text-primary me-2"></i>{{ t.section_plan }}
+        <span class="text-muted small fw-normal">({{ plan_entries|length }})</span></h6>
+      <i class="bi bi-chevron-down"></i>
     </div>
-    <div id="planEntriesContainer">
-      {% for entry in plan_entries %}
-      <div class="plan-entry-row d-flex align-items-start gap-2" data-entry-id="{{ entry.id }}">
-        {% if is_trainer %}<span class="drag-handle mt-1"><i class="bi bi-grip-vertical"></i></span>{% endif %}
-        {% if entry.photo %}
-        <img src="{{ entry.photo.url }}" class="plan-entry-photo-thumb" alt="" onclick="viewPlanEntryPhoto('{{ entry.photo.url }}')">
-        {% endif %}
-        <div class="flex-grow-1">
-          <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
-            <span class="badge category-badge-{{ entry.category }} rounded-pill px-2 py-1" style="font-size:.72rem">
-              {% if entry.category == 'warmup' %}{{ t.cat_warmup }}
-              {% elif entry.category == 'main' %}{{ t.cat_main }}
-              {% else %}{{ t.cat_cooldown }}{% endif %}
-            </span>
-            {% if entry.distance %}<span class="badge bg-secondary rounded-pill" style="font-size:.72rem">{{ entry.distance }}</span>{% endif %}
-            {% if entry.intensity %}<span class="text-muted" style="font-size:.75rem"><i class="bi bi-lightning"></i> {{ entry.intensity }}</span>{% endif %}
-          </div>
-          <p class="mb-0 small" style="line-height:1.4">{{ entry.description }}</p>
-          {% if entry.rest_seconds %}<small class="text-muted"><i class="bi bi-hourglass me-1"></i>{{ entry.rest_seconds }}s</small>{% endif %}
-        </div>
-        {% if is_trainer %}
-        <div class="d-flex flex-column gap-1">
-          <button class="btn btn-xs btn-outline-secondary p-1" style="line-height:1" onclick="editPlanEntry({{ entry.id }})">
-            <i class="bi bi-pencil" style="font-size:.7rem"></i>
+    <div class="collapse show" id="planBody">
+      {% if is_trainer %}
+        <div class="input-group input-group-sm mb-2">
+          <input type="text" id="planQuickAdd"
+                 class="form-control bg-transparent border-secondary text-light"
+                 placeholder="{{ t.plan_quick_add_placeholder }}" title="{{ t.plan_quick_add_hint }}">
+          <button type="button" class="btn btn-outline-secondary" id="planPhotoQuickAddBtn" title="{{ t.btn_add_photo_entry }}">
+            <i class="bi bi-camera"></i>
           </button>
-          <button class="btn btn-xs btn-outline-danger p-1" style="line-height:1" onclick="deletePlanEntry({{ entry.id }})">
-            <i class="bi bi-trash" style="font-size:.7rem"></i>
+          <button type="button" class="btn btn-outline-primary" id="planQuickAddBtn" title="{{ t.btn_add_entry }}">
+            <i class="bi bi-plus-lg"></i>
           </button>
         </div>
-        {% endif %}
+        <input type="file" id="planPhotoQuickAddInput" accept="image/*" style="display:none">
+      {% endif %}
+      <div id="planEntriesContainer">
+        {% for entry in plan_entries %}
+        <div class="plan-entry-row d-flex align-items-center gap-2{% if entry.checked %} is-checked{% endif %}" data-entry-id="{{ entry.id }}">
+          {% if is_trainer %}<span class="drag-handle"><i class="bi bi-grip-vertical"></i></span>{% endif %}
+          {% if is_trainer %}
+          <input type="checkbox" class="plan-check" {% if entry.checked %}checked{% endif %}
+                 onchange="togglePlanEntry({{ entry.id }}, this.checked)">
+          {% else %}
+          <i class="bi {% if entry.checked %}bi-check-circle-fill text-success{% else %}bi-circle text-muted{% endif %}"></i>
+          {% endif %}
+          <span class="plan-cat-dot cat-{{ entry.category }}"
+                title="{% if entry.category == 'warmup' %}{{ t.cat_warmup }}{% elif entry.category == 'main' %}{{ t.cat_main }}{% else %}{{ t.cat_cooldown }}{% endif %}"></span>
+          <span class="plan-entry-text flex-grow-1 text-truncate"
+                {% if is_trainer %}onclick="startPlanEntryEdit({{ entry.id }})"{% endif %}>
+            {% if entry.distance %}{{ entry.distance }} · {% endif %}{% if entry.intensity %}{{ entry.intensity }} · {% endif %}{{ entry.description }}{% if entry.rest_seconds %} · ⏱{{ entry.rest_seconds }}s{% endif %}
+          </span>
+          {% if entry.photo %}
+          <span class="plan-entry-photo-wrap">
+            <img src="{{ entry.photo.url }}" class="plan-entry-photo-thumb-sm" onclick="viewPlanEntryPhoto('{{ entry.photo.url }}')">
+            {% if is_trainer %}<button class="plan-entry-photo-remove" title="{{ t.btn_remove_photo }}" onclick="removePlanEntryPhotoFor({{ entry.id }}, event)">&times;</button>{% endif %}
+          </span>
+          {% endif %}
+          {% if is_trainer %}
+          <button class="btn btn-xs btn-icon-only" title="{{ t.btn_add_photo }}" onclick="triggerPlanEntryPhotoFor({{ entry.id }})"><i class="bi bi-camera" style="font-size:.75rem"></i></button>
+          <button class="btn btn-xs btn-icon-only text-danger" onclick="deletePlanEntry({{ entry.id }})"><i class="bi bi-trash" style="font-size:.75rem"></i></button>
+          {% endif %}
+        </div>
+        {% empty %}
+        <div id="emptyPlan" class="text-center text-muted py-4 small">
+          <i class="bi bi-clipboard d-block mb-2" style="font-size:1.5rem"></i>{{ t.no_entries }}
+        </div>
+        {% endfor %}
       </div>
-      {% empty %}
-      <div id="emptyPlan" class="text-center text-muted py-4 small">
-        <i class="bi bi-clipboard d-block mb-2" style="font-size:1.5rem"></i>{{ t.no_entries }}
-      </div>
-      {% endfor %}
     </div>
   </div>
 
   <!-- Attendance -->
   <div class="col-lg-6">
-    <div class="d-flex align-items-center justify-content-between mb-2">
-      <h6 class="fw-bold mb-0"><i class="bi bi-person-check text-primary me-2"></i>{{ t.section_attendance }}</h6>
-      <div class="d-flex gap-2 text-muted small">
-        {% if is_trainer %}
+    <div class="d-flex align-items-center justify-content-between mb-2 section-collapse-header"
+         data-bs-toggle="collapse" data-bs-target="#attendanceBody" role="button" aria-expanded="true">
+      <h6 class="fw-bold mb-0"><i class="bi bi-person-check text-primary me-2"></i>{{ t.section_attendance }}
+        <span class="text-muted small fw-normal">({{ attendances|length }})</span></h6>
+      <div class="d-flex align-items-center gap-2 text-muted small">
+        <span title="{{ t.status_present }}"><i class="bi bi-circle-fill text-success"></i> <span id="countPresent">0</span></span>
+        <span title="{{ t.status_absent }}"><i class="bi bi-circle-fill text-danger"></i> <span id="countAbsent">0</span></span>
+        <span title="{{ t.status_excused }}"><i class="bi bi-circle-fill text-warning"></i> <span id="countExcused">0</span></span>
+        <i class="bi bi-chevron-down"></i>
+      </div>
+    </div>
+    <div class="collapse show" id="attendanceBody">
+      {% if is_trainer %}
+      <div class="d-flex gap-2 text-muted small mb-2">
         <button id="syncAttBtn"
                 class="btn btn-outline-secondary rounded-pill px-2"
                 style="font-size:.72rem;line-height:1.4;padding-top:.15rem;padding-bottom:.15rem"
@@ -145,113 +165,57 @@
                 title="{{ t.btn_mark_unknown_absent }}">
           <i class="bi bi-x-circle"></i> {{ t.btn_mark_unknown_absent }}
         </button>
-        {% endif %}
-        <span title="{{ t.status_present }}"><i class="bi bi-circle-fill text-success"></i> <span id="countPresent">0</span></span>
-        <span title="{{ t.status_absent }}"><i class="bi bi-circle-fill text-danger"></i> <span id="countAbsent">0</span></span>
-        <span title="{{ t.status_excused }}"><i class="bi bi-circle-fill text-warning"></i> <span id="countExcused">0</span></span>
       </div>
-    </div>
-    <div class="table-responsive">
-      <table class="table table-sm attendance-table mb-0">
-        <tbody id="attendanceTableBody">
-          {% for att in attendances %}
-          <tr id="att-row-{{ att.swimmer.id }}">
-            <td style="width:36px"><div class="sc-avatar-sm">{{ att.swimmer.initials }}</div></td>
-            <td>
-              <div class="d-flex flex-wrap gap-1 mt-1">
-                {% if att.group_role == 'trainer' %}
-                <span class="badge rounded-pill d-inline-flex align-items-center justify-content-center px-2 py-1"
-                      style="background:#FFD70022;color:#FFD700;border:1px solid #FFD70055;font-size:.68rem;">
-                  <i class="bi bi-star-fill"></i>
+      {% endif %}
+      <div class="table-responsive">
+        <table class="table table-sm attendance-table mb-0">
+          <tbody id="attendanceTableBody">
+            {% for att in attendances %}
+            <tr id="att-row-{{ att.swimmer.id }}">
+              <td style="width:36px"><div class="sc-avatar-sm">{{ att.swimmer.initials }}</div></td>
+              <td>
+                <div class="d-flex flex-wrap gap-1 mt-1">
+                  {% if att.group_role == 'trainer' %}
+                  <span class="badge rounded-pill d-inline-flex align-items-center justify-content-center px-2 py-1"
+                        style="background:#FFD70022;color:#FFD700;border:1px solid #FFD70055;font-size:.68rem;">
+                    <i class="bi bi-star-fill"></i>
+                  </span>
+                  {% endif %}
+                  <div class="fw-medium small">{{ att.swimmer.full_name }}</div>
+                  {% if att.excuse_token %}<small class="text-warning"><i class="bi bi-check-circle me-1"></i>{{ t.status_excused }}</small>{% endif %}
+                </div>
+              </td>
+              <td class="text-end">
+                {% if is_trainer %}
+                <div class="d-flex gap-1 justify-content-end flex-wrap">
+                  <button class="status-btn {% if att.status == 'present' %}active{% endif %}" data-status="present" onclick="updateAttendance({{ att.swimmer.id }},'present')"><i class="bi bi-check-lg"></i></button>
+                  <button class="status-btn {% if att.status == 'absent' %}active{% endif %}"  data-status="absent"  onclick="updateAttendance({{ att.swimmer.id }},'absent')"><i class="bi bi-x-lg"></i></button>
+                  <button class="status-btn {% if att.status == 'excused' %}active{% endif %}" data-status="excused" onclick="updateAttendance({{ att.swimmer.id }},'excused')"><i class="bi bi-shield-check"></i></button>
+                  <button class="status-btn {% if att.status == 'unknown' %}active{% endif %}" data-status="unknown" onclick="updateAttendance({{ att.swimmer.id }},'unknown')"><i class="bi bi-question-lg"></i></button>
+                </div>
+                {% else %}
+                <span class="badge {% if att.status == 'present' %}bg-success{% elif att.status == 'absent' %}bg-danger{% elif att.status == 'excused' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                  {% if att.status == 'present' %}{{ t.status_present }}
+                  {% elif att.status == 'absent' %}{{ t.status_absent }}
+                  {% elif att.status == 'excused' %}{{ t.status_excused }}
+                  {% else %}{{ t.status_unknown }}{% endif %}
                 </span>
                 {% endif %}
-                <div class="fw-medium small">{{ att.swimmer.full_name }}</div>
-                {% if att.excuse_token %}<small class="text-warning"><i class="bi bi-check-circle me-1"></i>{{ t.status_excused }}</small>{% endif %}
-              </div>
-            </td>
-            <td class="text-end">
-              {% if is_trainer %}
-              <div class="d-flex gap-1 justify-content-end flex-wrap">
-                <button class="status-btn {% if att.status == 'present' %}active{% endif %}" data-status="present" onclick="updateAttendance({{ att.swimmer.id }},'present')"><i class="bi bi-check-lg"></i></button>
-                <button class="status-btn {% if att.status == 'absent' %}active{% endif %}"  data-status="absent"  onclick="updateAttendance({{ att.swimmer.id }},'absent')"><i class="bi bi-x-lg"></i></button>
-                <button class="status-btn {% if att.status == 'excused' %}active{% endif %}" data-status="excused" onclick="updateAttendance({{ att.swimmer.id }},'excused')"><i class="bi bi-shield-check"></i></button>
-                <button class="status-btn {% if att.status == 'unknown' %}active{% endif %}" data-status="unknown" onclick="updateAttendance({{ att.swimmer.id }},'unknown')"><i class="bi bi-question-lg"></i></button>
-              </div>
-              {% else %}
-              <span class="badge {% if att.status == 'present' %}bg-success{% elif att.status == 'absent' %}bg-danger{% elif att.status == 'excused' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
-                {% if att.status == 'present' %}{{ t.status_present }}
-                {% elif att.status == 'absent' %}{{ t.status_absent }}
-                {% elif att.status == 'excused' %}{{ t.status_excused }}
-                {% else %}{{ t.status_unknown }}{% endif %}
-              </span>
-              {% endif %}
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="3" class="text-center text-muted py-3 small">{{ t.no_members }}</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-{% if is_trainer %}
-<!-- Inline plan entry editor -->
-<div id="planEntryEditor" class="sc-card mt-3 p-3" style="display:none">
-  <h6 class="fw-bold mb-3">{{ t.btn_add_entry }}</h6>
-  <div class="row g-2">
-    <div class="col-md-4">
-      <label class="form-label small">{{ t.lbl_category }}</label>
-      <select id="editorCategory" class="form-select form-select-sm bg-transparent border-secondary text-light">
-        <option value="warmup">{{ t.cat_warmup }}</option>
-        <option value="main" selected>{{ t.cat_main }}</option>
-        <option value="cooldown">{{ t.cat_cooldown }}</option>
-      </select>
-    </div>
-    <div class="col-md-4">
-      <label class="form-label small">{{ t.lbl_distance }}</label>
-      <input type="text" id="editorDistance" class="form-control form-control-sm bg-transparent border-secondary text-light" placeholder="4×50m">
-    </div>
-    <div class="col-md-4">
-      <label class="form-label small">{{ t.lbl_intensity }}</label>
-      <input type="text" id="editorIntensity" class="form-control form-control-sm bg-transparent border-secondary text-light" placeholder="Zone 2">
-    </div>
-    <div class="col-12">
-      <label class="form-label small">{{ t.lbl_description }}</label>
-      <textarea id="editorDescription" rows="2" class="form-control form-control-sm bg-transparent border-secondary text-light"></textarea>
-    </div>
-    <div class="col-md-4">
-      <label class="form-label small">{{ t.lbl_rest }}</label>
-      <input type="number" id="editorRest" class="form-control form-control-sm bg-transparent border-secondary text-light" placeholder="30">
-    </div>
-    <div class="col-12">
-      <p id="editorPhotoNewHint" class="text-muted small mb-0" style="display:none">{{ t.photo_save_first }}</p>
-      <div id="editorPhotoSection" style="display:none">
-        <label class="form-label small">{{ t.lbl_photo }}</label>
-        <div class="d-flex flex-wrap align-items-center gap-2">
-          <img id="editorPhotoPreview" class="plan-entry-photo-editor-preview" style="display:none" alt="">
-          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="triggerPlanEntryPhotoCamera()">
-            <i class="bi bi-camera"></i> {{ t.btn_take_photo }}
-          </button>
-          <button type="button" class="btn btn-outline-secondary btn-sm" onclick="triggerPlanEntryPhotoGallery()">
-            <i class="bi bi-images"></i> {{ t.btn_choose_photo }}
-          </button>
-          <button type="button" id="editorPhotoRemoveBtn" class="btn btn-outline-danger btn-sm" style="display:none" onclick="removePlanEntryPhoto()">
-            <i class="bi bi-trash"></i> {{ t.btn_remove_photo }}
-          </button>
-        </div>
-        <input type="file" id="editorPhotoCameraInput" accept="image/*" capture="environment" style="display:none">
-        <input type="file" id="editorPhotoGalleryInput" accept="image/*" style="display:none">
+              </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3" class="text-center text-muted py-3 small">{{ t.no_members }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
     </div>
-    <div class="col-12 d-flex gap-2 justify-content-end mt-1">
-      <button class="btn btn-secondary btn-sm" onclick="cancelPlanEdit()">{{ t.btn_cancel }}</button>
-      <button class="btn btn-primary btn-sm" onclick="savePlanEntry()">{{ t.btn_save_entry }}</button>
-    </div>
   </div>
 </div>
-{% endif %}
 
+<!-- Shared hidden file input for plan-entry photos, targeted via _editingEntryId in session.js -->
+{% if is_trainer %}
+<input type="file" id="planPhotoInput" accept="image/*" style="display:none">
+{% endif %}
 
 {% endif %}

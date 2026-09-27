@@ -165,6 +165,9 @@ class TrainingPlanEntry(models.Model):
         upload_to='training_plans/%Y/%m/', blank=True, null=True,
         help_text='Photo of a hand-written plan, e.g. taken poolside.'
     )
+    checked = models.BooleanField(
+        default = False, help_text = 'Ticked off while executing the session; does not affect ordering.'
+    )
 
     class Meta:
         ordering = ['order']
@@ -182,6 +185,7 @@ class TrainingPlanEntry(models.Model):
             'intensity': self.intensity,
             'rest_seconds': self.rest_seconds,
             'photo_url': self.photo.url if self.photo else None,
+            'checked': self.checked,
         }
 
 

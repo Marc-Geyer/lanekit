@@ -97,6 +97,16 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
                 'data': data,
             })
 
+        elif action == 'photo_entry_created':
+            # A brand-new plan entry created directly from a photo (see
+            # plan_entry_photo_create_view) — same rationale as
+            # photo_updated above, but this one is an addition, not an
+            # update, so every connected device should insert a new row.
+            await self.channel_layer.group_send(self.room_group, {
+                'type': 'broadcast_plan_add',
+                'data': data,
+            })
+
         elif action == 'mark_unknown_absent':
             result = await self.db_mark_unknown_absent()
             await self.channel_layer.group_send(self.room_group, {
@@ -206,7 +216,7 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
     def db_update_plan_entry(self, data):
         from training.models import TrainingPlanEntry
         entry = TrainingPlanEntry.objects.get(pk=data['id'], session_id=self.session_id)
-        for field in ('description', 'distance', 'intensity', 'rest_seconds', 'category'):
+        for field in ('description', 'distance', 'intensity', 'rest_seconds', 'category', 'checked'):
             if field in data:
                 setattr(entry, field, data[field])
         entry.save()

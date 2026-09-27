@@ -228,11 +228,13 @@ body {
 
 /* ── Training plan ── */
 .plan-entry-row {
+  display: flex;
+  align-items: center;
   background: var(--sc-surface);
   border: 1px solid var(--sc-border);
-  border-radius: 10px;
-  padding: .75rem 1rem;
-  margin-bottom: .5rem;
+  border-radius: 8px;
+  padding: .35rem .6rem;
+  margin-bottom: .3rem;
   transition: box-shadow .15s;
 }
 .plan-entry-row:hover { box-shadow: 0 2px 12px rgba(0,0,0,.25); }
@@ -243,6 +245,54 @@ body {
 }
 .plan-entry-row .drag-handle:active { cursor: grabbing; }
 
+.plan-entry-row .plan-check { flex-shrink: 0; cursor: pointer; }
+
+.plan-entry-text {
+  font-size: .85rem;
+  line-height: 1.3;
+  cursor: text;
+  min-width: 0; /* let text-truncate actually truncate inside the flex row */
+}
+.plan-entry-edit-input { font-size: .85rem; }
+
+.plan-entry-row.is-checked .plan-entry-text { text-decoration: line-through; opacity: .55; }
+.plan-entry-row.is-checked .plan-cat-dot    { opacity: .55; }
+
+.plan-cat-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.plan-cat-dot.cat-warmup   { background: #f59e0b; }
+.plan-cat-dot.cat-main     { background: #0ea5e9; }
+.plan-cat-dot.cat-cooldown { background: #22c55e; }
+
+.btn-icon-only { padding: 2px 6px; line-height: 1; }
+
+.plan-entry-photo-thumb-sm {
+  width: 28px; height: 28px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--sc-border);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.plan-entry-photo-wrap { position: relative; display: inline-flex; flex-shrink: 0; }
+.plan-entry-photo-remove {
+  position: absolute; top: -6px; right: -6px;
+  width: 16px; height: 16px; line-height: 14px;
+  border-radius: 50%;
+  background: var(--sc-danger); color: #fff; border: none;
+  font-size: .65rem; padding: 0; cursor: pointer;
+}
+
+/* ── Collapsible section headers (training plan / attendance) ── */
+.section-collapse-header { cursor: pointer; user-select: none; }
+.section-collapse-header .bi-chevron-down { transition: transform .2s; }
+.section-collapse-header.collapsed .bi-chevron-down { transform: rotate(-90deg); }
+
+/* Old pill-style category badges – unused after the compact redesign above,
+   kept in case anything else still references them. */
 .category-badge-warmup  { background: #f59e0b22; color: #f59e0b; }
 .category-badge-main    { background: #0ea5e922; color: #0ea5e9; }
 .category-badge-cooldown{ background: #22c55e22; color: #22c55e; }

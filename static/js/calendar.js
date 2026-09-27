@@ -137,6 +137,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     initSortable();
     updateAttendanceCounts();
+    if (typeof initCollapsibleSections === 'function') initCollapsibleSections();
   }
 
   // Clean up when modal closes

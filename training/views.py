@@ -354,6 +354,39 @@ def plan_entry_photo_view(request, entry_id):
 
     return JsonResponse({'error': 'method not allowed'}, status=405)
 
+@login_required
+def plan_entry_photo_create_view(request, instance_id):
+    """Create a brand-new plan entry directly from a photo (POST, multipart).
+
+    For digitizing an existing paper plan poolside: a trainer photographs a
+    handwritten set and it becomes its own entry immediately, with no
+    shorthand to type. Mirrors the ordering logic in
+    consumers.db_add_plan_entry so entries created this way slot in at the
+    end of the list just like a normal quick-add.
+    """
+    instance = get_object_or_404(
+        SessionInstance.objects.select_related('recurring_session__group'),
+        pk=instance_id,
+    )
+    recurring = instance.recurring_session
+    if not _is_session_trainer(request, recurring):
+        return JsonResponse({'error': 'forbidden'}, status=403)
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'method not allowed'}, status=405)
+
+    photo = request.FILES.get('photo')
+    if not photo:
+        return JsonResponse({'error': 'no file provided'}, status=400)
+
+    last = TrainingPlanEntry.objects.filter(session=instance).order_by('order').last()
+    entry = TrainingPlanEntry.objects.create(
+        session=instance,
+        order=(last.order + 1) if last else 0,
+        category=request.POST.get('category', 'main'),
+        photo=photo,
+    )
+    return JsonResponse(entry.to_dict())
 
 # ── Excuse token ─────────────────────────────────────────────────────────────
 

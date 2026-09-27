@@ -336,50 +336,201 @@ function handleSyncAttendance(data) {
 
 let _editingEntryId = null;
 
-window.addPlanEntry = function () {
-  _editingEntryId = null;
-  clearEditor();
-  updatePhotoEditorUI(null);
-  document.getElementById('planEntryEditor').style.display = 'block';
-  document.getElementById('editorDescription').focus();
-};
 
-window.editPlanEntry = function (entryId) {
-  _editingEntryId = entryId;
-  const cached = window._planCache && window._planCache[entryId];
-  if (cached) {
-    document.getElementById('editorCategory').value    = cached.category    || 'main';
-    document.getElementById('editorDescription').value = cached.description || '';
-    document.getElementById('editorDistance').value    = cached.distance    || '';
-    document.getElementById('editorIntensity').value   = cached.intensity   || '';
-    document.getElementById('editorRest').value        = cached.rest_seconds || '';
+/* ── Quick-add / edit shorthand parser ────────────────────────────────────────
+   One line in, structured fields out:
+     "H: 8x100m @GA2 20s Kraul, Fokus Beinschlag"
+   WU:/H:/CD:        -> category   (optional; defaults to the previous entry's category)
+   NxM(m) / NxNxM(m) -> distance   (e.g. 8x100m, 4x6x100m)
+   Nmin / N' / N min -> distance   (time-based sets instead of meters, e.g. 5min, 5')
+   @token            -> intensity  (e.g. @GA2, @Sprint)
+   Ns / Nsek         -> rest_seconds
+   everything left over -> description
+   Only the FIRST distance-shaped token in the line is taken; anything later
+   that merely looks like a distance (e.g. a stroke breakdown
+   "200m: 50m arme, 250m beine, 100m gesamt") stays in the description as-is.
+   Plain text with none of these markers is just filed as the description,
+   so a free-text note ("Besprechung Wettkampfplan") still works.
+   ─────────────────────────────────────────────────────────────────────────── */
+const CATEGORY_PREFIXES = { wu: 'warmup', h: 'main', cd: 'cooldown' };
+const CATEGORY_SHORT    = { warmup: 'WU', main: 'H', cooldown: 'CD' };
+
+function parsePlanEntryText(raw, fallbackCategory) {
+  let text = (raw || '').trim();
+  let category = fallbackCategory || 'main';
+
+  const catMatch = text.match(/^(wu|h|cd)\s*:\s*/i);
+  if (catMatch) {
+    category = CATEGORY_PREFIXES[catMatch[1].toLowerCase()];
+    text = text.slice(catMatch[0].length);
   }
-  updatePhotoEditorUI(cached);
-  document.getElementById('planEntryEditor').style.display = 'block';
-};
 
-window.cancelPlanEdit = function () {
-  document.getElementById('planEntryEditor').style.display = 'none';
-  _editingEntryId = null;
-};
+  let rest_seconds = null;
+  const restMatch = text.match(/\b(\d{1,3})\s?(s|sec|sek)\b\.?/i);
+  if (restMatch) {
+    rest_seconds = parseInt(restMatch[1], 10);
+    text = (text.slice(0, restMatch.index) + text.slice(restMatch.index + restMatch[0].length)).trim();
+  }
 
-window.savePlanEntry = function () {
-  const data = {
-    category:     document.getElementById('editorCategory').value,
-    description:  document.getElementById('editorDescription').value,
-    distance:     document.getElementById('editorDistance').value,
-    intensity:    document.getElementById('editorIntensity').value,
-    rest_seconds: parseInt(document.getElementById('editorRest').value) || null,
+  // Distance: take whichever of these forms occurs EARLIEST in the (remaining)
+  // text — everything after it that merely looks like a distance too (e.g. a
+  // stroke breakdown "25m arme, 25m beine, 100m gesamt") is left untouched as
+  // description. Covers plain meters, repeat×repeat×...×meters chains
+  // (4x100m, 4x6x100m, ...), and time-based sets used instead of a distance
+  // (5min, 5 min, 5').
+  const distCandidates = [
+    { re: /\b(\d+(?:\s*[x×]\s*\d+)+)\s*m?\b/i, fmt: (m) => `${m[1].replace(/\s*[x×]\s*/gi, '×')}m` },
+    { re: /\b(\d+)\s*m\b/i,                    fmt: (m) => `${m[1]}m` },
+    { re: /\b(\d+)\s*(?:min|minuten)\b/i,      fmt: (m) => `${m[1]}min` },
+    { re: /\b(\d+)\s*'/,                       fmt: (m) => `${m[1]}'` },
+  ];
+  let distance = '';
+  let bestDist = null;
+  for (const cand of distCandidates) {
+    const m = text.match(cand.re);
+    if (m && (bestDist === null || m.index < bestDist.match.index)) bestDist = { match: m, fmt: cand.fmt };
+  }
+  if (bestDist) {
+    distance = bestDist.fmt(bestDist.match);
+    text = (text.slice(0, bestDist.match.index) + text.slice(bestDist.match.index + bestDist.match[0].length)).trim();
+  }
+
+  let intensity = '';
+  const intMatch = text.match(/@(\S+)/);
+  if (intMatch) {
+    intensity = intMatch[1].replace(/[.,;:]+$/, '');
+    text = (text.slice(0, intMatch.index) + text.slice(intMatch.index + intMatch[0].length)).trim();
+  }
+
+  const description = text.replace(/\s{2,}/g, ' ').replace(/^[,;\s]+|[,;\s]+$/g, '');
+
+  return { category, distance, intensity, rest_seconds, description };
+}
+
+/* Rebuild the shorthand from an entry's fields, for the click-to-edit input. */
+function composePlanEntryText(entry) {
+  const parts = [`${CATEGORY_SHORT[entry.category] || 'H'}:`];
+  if (entry.distance) parts.push(entry.distance);
+  if (entry.intensity) parts.push(`@${entry.intensity}`);
+  if (entry.rest_seconds) parts.push(`${entry.rest_seconds}s`);
+  if (entry.description) parts.push(entry.description);
+  return parts.join(' ');
+}
+
+/* Human-readable single-line label (no shorthand markers) for display. */
+function composeInlineLabel(entry) {
+  const bits = [];
+  if (entry.distance) bits.push(entry.distance);
+  if (entry.intensity) bits.push(entry.intensity);
+  if (entry.description) bits.push(entry.description);
+  if (entry.rest_seconds) bits.push(`⏱${entry.rest_seconds}s`);
+  return bits.join(' · ') || '…';
+}
+
+function lastPlanCategory() {
+  const rows = document.querySelectorAll('#planEntriesContainer .plan-entry-row');
+  if (!rows.length) return 'main';
+  const lastId = rows[rows.length - 1].dataset.entryId;
+  return (window._planCache && window._planCache[lastId] && window._planCache[lastId].category) || 'main';
+}
+
+/* Quick-add: called on Enter in the field, or on the "+" button click. */
+function submitPlanQuickAdd() {
+  const input = document.getElementById('planQuickAdd');
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+  wsSend('add_plan_entry', parsePlanEntryText(text, lastPlanCategory()));
+  input.value = '';
+  input.focus();
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.target.id === 'planQuickAdd' && e.key === 'Enter') {
+    e.preventDefault();
+    submitPlanQuickAdd();
+  }
+});
+
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#planQuickAddBtn')) {
+    submitPlanQuickAdd();
+  }
+  if (e.target.closest('#planPhotoQuickAddBtn')) {
+    document.getElementById('planPhotoQuickAddInput')?.click();
+  }
+});
+
+/* Photo-only quick add: for digitizing an existing paper plan poolside —
+   snap a photo and it becomes its own entry immediately, no typing needed.
+   Goes straight to the DB via a dedicated endpoint (create-with-photo in one
+   request), then tells other connected devices via the WebSocket; the
+   broadcast comes back to this device too, so rendering happens uniformly
+   through handlePlanAdd for everyone, the same as a normal quick-add. */
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'planPhotoQuickAddInput') {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    uploadPhotoOnlyEntry(file);
+  }
+});
+
+function uploadPhotoOnlyEntry(file) {
+  const formData = new FormData();
+  formData.append('photo', file);
+  formData.append('category', lastPlanCategory());
+  fetch(`/training/session/${window._wsConn.instanceId}/plan-entry/photo-create/`, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': getCookie('csrftoken') },
+    body: formData,
+  })
+    .then(r => { if (!r.ok) throw new Error('create failed'); return r.json(); })
+    .then(entry => {
+      wsSend('photo_entry_created', entry);
+    })
+    .catch(() => alert(UI_STRINGS.photoUploadError));
+}
+
+
+/* Click a row's text to turn it into an editable shorthand input. */
+window.startPlanEntryEdit = function (entryId) {
+  const row = document.querySelector(`.plan-entry-row[data-entry-id="${entryId}"]`);
+  const span = row && row.querySelector('.plan-entry-text');
+  if (!span) return;
+  const entry = (window._planCache && window._planCache[entryId]) || {};
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'plan-entry-edit-input form-control form-control-sm bg-transparent border-secondary text-light flex-grow-1';
+  input.value = composePlanEntryText(entry);
+  span.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let committed = false;
+  const commit = () => {
+    if (committed) return;
+    committed = true;
+    const parsed = parsePlanEntryText(input.value, entry.category);
+    parsed.id = entryId;
+    wsSend('update_plan_entry', parsed);
+    handlePlanUpdate({ ...entry, ...parsed });
   };
-  if (_editingEntryId) {
-    data.id = _editingEntryId;
-    wsSend('update_plan_entry', data);
-    handlePlanUpdate({ ...data, id: _editingEntryId });
-  } else {
-    wsSend('add_plan_entry', data);
-  }
-  cancelPlanEdit();
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { e.preventDefault(); committed = true; handlePlanUpdate(entry); }
+  });
+  input.addEventListener('blur', commit);
 };
+
+/* Checkbox toggle – stays in place, never reorders. */
+window.togglePlanEntry = function (entryId, checked) {
+  const entry = (window._planCache && window._planCache[entryId]) || {};
+  wsSend('update_plan_entry', { id: entryId, checked });
+  handlePlanUpdate({ ...entry, id: entryId, checked });
+};
+
 
 window.deletePlanEntry = function (entryId) {
   if (!confirm(UI_STRINGS.confirmDeleteEntry)) return;
@@ -446,50 +597,15 @@ function handleNotesUpdate(data) {
   if (ta && document.activeElement !== ta) ta.value = data.notes || '';
 }
 
-function clearEditor() {
-  ['editorCategory', 'editorDescription', 'editorDistance', 'editorIntensity', 'editorRest']
-    .forEach(id => { const el = document.getElementById(id); if (el) el.value = id === 'editorCategory' ? 'main' : ''; });
-}
+/* ── Training plan photo (single OS picker – camera or library) ───────────── */
 
-/* ── Training plan photo (upload from camera or gallery) ──────────────────── */
-
-function updatePhotoEditorUI(entry) {
-  const section  = document.getElementById('editorPhotoSection');
-  const hint     = document.getElementById('editorPhotoNewHint');
-  const preview  = document.getElementById('editorPhotoPreview');
-  const removeBtn = document.getElementById('editorPhotoRemoveBtn');
-  if (!section) return;
-
-  // A brand-new, unsaved entry has no id yet, so there's nothing to attach
-  // a photo to until it's saved once.
-  if (!entry || !entry.id) {
-    section.style.display = 'none';
-    if (hint) hint.style.display = 'block';
-    return;
-  }
-
-  section.style.display = 'block';
-  if (hint) hint.style.display = 'none';
-
-  if (entry.photo_url) {
-    if (preview) { preview.src = entry.photo_url; preview.style.display = 'block'; }
-    if (removeBtn) removeBtn.style.display = 'inline-block';
-  } else {
-    if (preview) { preview.style.display = 'none'; preview.removeAttribute('src'); }
-    if (removeBtn) removeBtn.style.display = 'none';
-  }
-}
-
-window.triggerPlanEntryPhotoCamera = function () {
-  document.getElementById('editorPhotoCameraInput')?.click();
-};
-
-window.triggerPlanEntryPhotoGallery = function () {
-  document.getElementById('editorPhotoGalleryInput')?.click();
+window.triggerPlanEntryPhotoFor = function (entryId) {
+  _editingEntryId = entryId;
+  document.getElementById('planPhotoInput')?.click();
 };
 
 document.addEventListener('change', (e) => {
-  if (e.target.id === 'editorPhotoCameraInput' || e.target.id === 'editorPhotoGalleryInput') {
+  if (e.target.id === 'planPhotoInput') {
     const file = e.target.files && e.target.files[0];
     if (file) uploadPlanEntryPhoto(file);
     e.target.value = ''; // allow picking the same file again later
@@ -508,23 +624,21 @@ function uploadPlanEntryPhoto(file) {
     .then(r => { if (!r.ok) throw new Error('upload failed'); return r.json(); })
     .then(entry => {
       handlePlanUpdate(entry);
-      updatePhotoEditorUI(entry);
       wsSend('photo_updated', entry); // tell other connected devices
     })
     .catch(() => alert(UI_STRINGS.photoUploadError));
 }
 
-window.removePlanEntryPhoto = function () {
-  if (!_editingEntryId) return;
+window.removePlanEntryPhotoFor = function (entryId, evt) {
+  if (evt) evt.stopPropagation();
   if (!confirm(UI_STRINGS.confirmRemovePhoto)) return;
-  fetch(`/training/plan-entry/${_editingEntryId}/photo/`, {
+  fetch(`/training/plan-entry/${entryId}/photo/`, {
     method: 'DELETE',
     headers: { 'X-CSRFToken': getCookie('csrftoken') },
   })
     .then(r => { if (!r.ok) throw new Error('delete failed'); return r.json(); })
     .then(entry => {
       handlePlanUpdate(entry);
-      updatePhotoEditorUI(entry);
       wsSend('photo_updated', entry);
     })
     .catch(() => alert(UI_STRINGS.photoUploadError));
@@ -535,41 +649,45 @@ window.viewPlanEntryPhoto = function (url) {
   window.open(url, '_blank');
 };
 
-/* Use translated category labels from UI_STRINGS (injected by base.html) */
-const CAT_LABELS = () => ({
-  warmup:   UI_STRINGS.catWarmup,
-  main:     UI_STRINGS.catMain,
-  cooldown: UI_STRINGS.catCooldown,
-});
-
 function renderPlanEntryHTML(entry) {
-  const cat      = entry.category || 'main';
-  const catLabel = CAT_LABELS()[cat] || cat;
-  const trainer  = window.SESSION_IS_TRAINER;
+  const cat     = entry.category || 'main';
+  const trainer = window.SESSION_IS_TRAINER;
+  const catLabel = { warmup: UI_STRINGS.catWarmup, main: UI_STRINGS.catMain, cooldown: UI_STRINGS.catCooldown }[cat] || cat;
   return `
-  <div class="plan-entry-row d-flex align-items-start gap-2" data-entry-id="${entry.id}">
-    ${trainer ? '<span class="drag-handle mt-1"><i class="bi bi-grip-vertical"></i></span>' : ''}
-    ${entry.photo_url ? `<img src="${entry.photo_url}" class="plan-entry-photo-thumb" alt="" onclick="viewPlanEntryPhoto('${entry.photo_url}')">` : ''}
-    <div class="flex-grow-1">
-      <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
-        <span class="badge category-badge-${cat} rounded-pill px-2 py-1" style="font-size:.72rem">${catLabel}</span>
-        ${entry.distance  ? `<span class="badge bg-secondary rounded-pill" style="font-size:.72rem">${entry.distance}</span>` : ''}
-        ${entry.intensity ? `<span class="text-muted" style="font-size:.75rem"><i class="bi bi-lightning"></i> ${entry.intensity}</span>` : ''}
-      </div>
-      <p class="mb-0 small" style="line-height:1.4">${entry.description || ''}</p>
-      ${entry.rest_seconds ? `<small class="text-muted"><i class="bi bi-hourglass me-1"></i>${entry.rest_seconds}s</small>` : ''}
-    </div>
+  <div class="plan-entry-row d-flex align-items-center gap-2${entry.checked ? ' is-checked' : ''}" data-entry-id="${entry.id}">
+    ${trainer ? '<span class="drag-handle"><i class="bi bi-grip-vertical"></i></span>' : ''}
+    ${trainer
+      ? `<input type="checkbox" class="plan-check" ${entry.checked ? 'checked' : ''} onchange="togglePlanEntry(${entry.id}, this.checked)">`
+      : `<i class="bi ${entry.checked ? 'bi-check-circle-fill text-success' : 'bi-circle text-muted'}"></i>`}
+    <span class="plan-cat-dot cat-${cat}" title="${catLabel}"></span>
+    <span class="plan-entry-text flex-grow-1 text-truncate"${trainer ? ` onclick="startPlanEntryEdit(${entry.id})"` : ''}>
+      ${composeInlineLabel(entry)}
+    </span>
+    ${entry.photo_url ? `
+    <span class="plan-entry-photo-wrap">
+      <img src="${entry.photo_url}" class="plan-entry-photo-thumb-sm" onclick="viewPlanEntryPhoto('${entry.photo_url}')">
+      ${trainer ? `<button class="plan-entry-photo-remove" title="${UI_STRINGS.btnRemovePhoto}" onclick="removePlanEntryPhotoFor(${entry.id}, event)">&times;</button>` : ''}
+    </span>` : ''}
     ${trainer ? `
-    <div class="d-flex flex-column gap-1">
-      <button class="btn btn-xs btn-outline-secondary p-1" style="line-height:1" onclick="editPlanEntry(${entry.id})">
-        <i class="bi bi-pencil" style="font-size:.7rem"></i>
-      </button>
-      <button class="btn btn-xs btn-outline-danger p-1" style="line-height:1" onclick="deletePlanEntry(${entry.id})">
-        <i class="bi bi-trash" style="font-size:.7rem"></i>
-      </button>
-    </div>` : ''}
+    <button class="btn btn-xs btn-icon-only" title="${UI_STRINGS.btnAddPhoto}" onclick="triggerPlanEntryPhotoFor(${entry.id})"><i class="bi bi-camera" style="font-size:.75rem"></i></button>
+    <button class="btn btn-xs btn-icon-only text-danger" onclick="deletePlanEntry(${entry.id})"><i class="bi bi-trash" style="font-size:.75rem"></i></button>` : ''}
   </div>`;
 }
+
+/* ── Collapsible sections – remembered per browser ─────────────────────────── */
+
+function initCollapsibleSections() {
+  ['plan', 'attendance'].forEach(key => {
+    const body = document.getElementById(`${key}Body`);
+    if (!body || typeof bootstrap === 'undefined') return;
+    const collapsed = localStorage.getItem(`lanekit_${key}Collapsed`) === '1';
+    const instance = bootstrap.Collapse.getOrCreateInstance(body, { toggle: false });
+    if (collapsed) instance.hide(); else instance.show();
+    body.addEventListener('shown.bs.collapse', () => localStorage.setItem(`lanekit_${key}Collapsed`, '0'));
+    body.addEventListener('hidden.bs.collapse', () => localStorage.setItem(`lanekit_${key}Collapsed`, '1'));
+  });
+}
+window.initCollapsibleSections = initCollapsibleSections;
 
 function renderAttendanceRowHTML(att) {
   const sid = att.swimmer_id;

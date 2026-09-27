@@ -7,6 +7,8 @@ urlpatterns = [
          views.session_state_api, name='session_state_api'),
     path('session/<int:instance_id>/attendance/',
          views.session_attendance_update_api, name='session_attendance_update_api'),
+    path('session/<int:instance_id>/plan-entry/photo-create/',
+         views.plan_entry_photo_create_view, name='plan_entry_photo_create'),
     path('session/<int:session_id>/<str:session_date>/',
          views.session_modal_view, name='session_modal'),
     path('plan-entry/<int:entry_id>/photo/',
