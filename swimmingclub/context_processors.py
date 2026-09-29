@@ -31,3 +31,18 @@ def i18n(request):
         'is_rtl':    lang in RTL_LANGUAGES,
         'LANGUAGES': LANGUAGES_DISPLAY,
     }
+
+
+def trainer_status(request):
+    """Expose `is_group_trainer` (trainer role in at least one group) to all templates.
+    Used to show the trainer section in the navbar."""
+    user = getattr(request, 'user', None)
+    if user is None or not user.is_authenticated:
+        return {'is_group_trainer': False}
+    from groups.models import GroupMembership
+
+    return {
+        'is_group_trainer': GroupMembership.objects.filter(
+            swimmer__user=user, role=GroupMembership.ROLE_TRAINER,
+        ).exists()
+    }

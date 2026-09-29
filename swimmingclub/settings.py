@@ -52,6 +52,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'swimmingclub.context_processors.branding',
                 'swimmingclub.context_processors.i18n',
+                'swimmingclub.context_processors.trainer_status',
             ],
         },
     },

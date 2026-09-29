@@ -11,6 +11,7 @@ STRINGS = {
     'nav_groups':               'المجموعات',
     'nav_people':               'الأشخاص',
     'nav_exception':            'إضافة استثناء',
+    'nav_trainer_report':       'تقرير المدرب',
     'nav_login':                'تسجيل الدخول',
     'nav_register':             'إنشاء حساب',
     'nav_profile':              'الملف الشخصي',
@@ -182,4 +183,20 @@ STRINGS = {
     'msg_exception_saved':      'تم حفظ الاستثناء ليوم {date}.',
     'msg_no_permission':        'ليس لديك صلاحية.',
     'msg_user_updated':         'تم تحديث المستخدم.',
+
+    # ── Trainer report ────────────────────────────────────────────────────────
+    'trainer_report_title':       'تقرير المدرب – نظرة ربع سنوية',
+    'trainer_report_prev':        'الربع السابق',
+    'trainer_report_next':        'الربع التالي',
+    'trainer_report_hint':        'الحصص التي تم تسجيلك فيها حاضراً بصفتك مدرباً. استخدم هذه القائمة لإدخال ساعاتك في البوابة الخارجية.',
+    'trainer_report_unmarked':    'حصص لم يتم تسجيل حضورك فيها بعد (غير مدرجة أدناه)',
+    'trainer_report_col_date':    'التاريخ',
+    'trainer_report_col_start':   'البداية',
+    'trainer_report_col_end':     'النهاية',
+    'trainer_report_col_hours':   'ساعات',
+    'trainer_report_col_group':   'المجموعة',
+    'trainer_report_col_location':'المكان',
+    'trainer_report_col_swimmers':'عدد السباحين',
+    'trainer_report_empty':       'لا توجد حصص في هذا الربع.',
+    'trainer_report_total':       'المجموع',
 }

@@ -512,3 +512,126 @@ def exception_create(request):
         messages.success(request, tr(request, 'msg_exception_saved', date=date_str))
         return redirect('calendar')
     return render(request, 'training/exception_form.html', {'form': form})
+
+# ── Trainer quarterly report ─────────────────────────────────────────────────
+
+def _format_hours(minutes):
+    """0.75 / 1 / 1.5 – dot decimal and no trailing zeros, as the external portal expects."""
+    return f'{minutes / 60:.2f}'.rstrip('0').rstrip('.')
+
+
+def _quarter_bounds(year, quarter):
+    import calendar
+    first_month = 3 * (quarter - 1) + 1
+    last_month = first_month + 2
+    return (
+        date(year, first_month, 1),
+        date(year, last_month, calendar.monthrange(year, last_month)[1]),
+    )
+
+
+@login_required
+def trainer_report_view(request):
+    """Quarterly overview of all sessions the current user attended as a trainer.
+
+    A session counts when the user's own Attendance row is marked *present* and
+    they hold the trainer role in the session's group. The swimmer count is the
+    number of present attendees who are not trainers of that group.
+    """
+    swimmer = Swimmer.objects.filter(user=request.user).first()
+    trainer_group_ids = set()
+    if swimmer:
+        # Deliberately not filtered by `active`: a trainer who left a group
+        # mid-quarter must still be able to report the sessions they led.
+        trainer_group_ids = set(
+            GroupMembership.objects
+            .filter(swimmer=swimmer, role=GroupMembership.ROLE_TRAINER)
+            .values_list('group_id', flat=True)
+        )
+    if not trainer_group_ids:
+        messages.error(request, tr(request, 'msg_no_permission'))
+        return redirect('calendar')
+
+    # ── Quarter selection (?year=2026&q=3, default: current quarter) ─────────
+    today = date.today()
+    try:
+        year = int(request.GET.get('year', today.year))
+        quarter = int(request.GET.get('q', (today.month - 1) // 3 + 1))
+        if not (1 <= quarter <= 4 and 2000 <= year <= 2100):
+            raise ValueError
+    except ValueError:
+        year, quarter = today.year, (today.month - 1) // 3 + 1
+    start, end = _quarter_bounds(year, quarter)
+
+    prev_year, prev_q = (year, quarter - 1) if quarter > 1 else (year - 1, 4)
+    next_year, next_q = (year, quarter + 1) if quarter < 4 else (year + 1, 1)
+
+    # ── Sessions the trainer was present in ──────────────────────────────────
+    base_qs = (
+        SessionInstance.objects
+        .filter(
+            date__range=(start, end),
+            recurring_session__group_id__in=trainer_group_ids,
+        )
+        .select_related('recurring_session__group', 'recurring_session__location')
+    )
+    instances = list(
+        # swimmer + status in ONE filter() call so both apply to the same
+        # attendance row (chained filters on a multi-valued relation would not)
+        base_qs.filter(attendances__swimmer=swimmer,
+                       attendances__status=Attendance.STATUS_PRESENT)
+        .distinct()
+        .order_by('date', 'recurring_session__start_time')
+    )
+
+    # Present attendees per instance, minus the trainers of that group
+    trainers_by_group = {}
+    for group_id, swimmer_id in GroupMembership.objects.filter(
+        group_id__in=trainer_group_ids, role=GroupMembership.ROLE_TRAINER,
+    ).values_list('group_id', 'swimmer_id'):
+        trainers_by_group.setdefault(group_id, set()).add(swimmer_id)
+
+    present_by_instance = {}
+    for instance_id, swimmer_id in Attendance.objects.filter(
+        session__in=instances, status=Attendance.STATUS_PRESENT,
+    ).values_list('session_id', 'swimmer_id'):
+        present_by_instance.setdefault(instance_id, set()).add(swimmer_id)
+
+    rows = []
+    total_minutes = 0
+    for inst in instances:
+        rec = inst.recurring_session
+        minutes = rec.duration_minutes
+        total_minutes += minutes
+        present = present_by_instance.get(inst.pk, set())
+        rows.append({
+            'date': inst.date,
+            'start': rec.start_time,
+            'end': rec.end_time,
+            'hours': _format_hours(minutes),
+            'group': rec.group,
+            'location': rec.location,
+            'swimmer_count': len(present - trainers_by_group.get(rec.group_id, set())),
+        })
+
+    # Sessions where the trainer's own attendance was never marked – these do
+    # not appear above, so surface them as a hint instead of silently dropping.
+    unmarked = list(
+        base_qs.filter(attendances__swimmer=swimmer,
+                       attendances__status=Attendance.STATUS_UNKNOWN)
+        .distinct()
+        .order_by('date', 'recurring_session__start_time')
+    )
+
+    return render(request, 'training/trainer_report.html', {
+        'rows': rows,
+        'total_hours': _format_hours(total_minutes),
+        'total_swimmers': sum(r['swimmer_count'] for r in rows),
+        'unmarked': unmarked,
+        'year': year,
+        'quarter': quarter,
+        'start': start,
+        'end': end,
+        'prev': {'year': prev_year, 'q': prev_q},
+        'next': {'year': next_year, 'q': next_q},
+    })

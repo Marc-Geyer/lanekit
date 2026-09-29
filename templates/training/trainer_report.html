@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block title %}{{ t.trainer_report_title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <h2 class="fw-bold mb-0" style="font-family:'Syne',sans-serif">
+    <i class="bi bi-clipboard-data text-primary me-2"></i>{{ t.trainer_report_title }}
+  </h2>
+  <div class="d-flex align-items-center gap-2">
+    <a href="?year={{ prev.year }}&q={{ prev.q }}" class="btn btn-outline-secondary btn-sm rounded-pill"
+       title="{{ t.trainer_report_prev }}"><i class="bi bi-chevron-left"></i></a>
+    <span class="fw-semibold px-2">Q{{ quarter }} {{ year }}
+      <span class="text-muted small d-block text-center">{{ start|date:"d.m.Y" }} – {{ end|date:"d.m.Y" }}</span>
+    </span>
+    <a href="?year={{ next.year }}&q={{ next.q }}" class="btn btn-outline-secondary btn-sm rounded-pill"
+       title="{{ t.trainer_report_next }}"><i class="bi bi-chevron-right"></i></a>
+  </div>
+</div>
+
+<p class="text-muted small">{{ t.trainer_report_hint }}</p>
+
+{% if unmarked %}
+<div class="alert alert-warning small">
+  <i class="bi bi-exclamation-triangle me-1"></i>
+  {{ t.trainer_report_unmarked }} ({{ unmarked|length }}):
+  {% for inst in unmarked %}{{ inst.date|date:"d.m." }} {{ inst.recurring_session.start_time|time:"H:i" }} ({{ inst.recurring_session.group.name }}){% if not forloop.last %}, {% endif %}{% endfor %}
+</div>
+{% endif %}
+
+<div class="sc-card p-0">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead>
+        <tr>
+          <th>{{ t.trainer_report_col_date }}</th>
+          <th>{{ t.trainer_report_col_start }}</th>
+          <th>{{ t.trainer_report_col_end }}</th>
+          <th>{{ t.trainer_report_col_hours }}</th>
+          <th>{{ t.trainer_report_col_group }}</th>
+          <th>{{ t.trainer_report_col_location }}</th>
+          <th class="text-end">{{ t.trainer_report_col_swimmers }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td class="text-nowrap">{{ r.date|date:"D, d.m.Y" }}</td>
+          <td>{{ r.start|time:"H:i" }}</td>
+          <td>{{ r.end|time:"H:i" }}</td>
+          <td>{{ r.hours }}</td>
+          <td><span class="badge" style="background:{{ r.group.color }}">{{ r.group.name }}</span></td>
+          <td>{{ r.location.name|default:"—" }}</td>
+          <td class="text-end">{{ r.swimmer_count }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-4">{{ t.trainer_report_empty }}</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if rows %}
+      <tfoot>
+        <tr class="fw-bold">
+          <td colspan="3">{{ t.trainer_report_total }} ({{ rows|length }})</td>
+          <td>{{ total_hours }}</td>
+          <td colspan="2"></td>
+          <td class="text-end">{{ total_swimmers }}</td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+{% endblock %}

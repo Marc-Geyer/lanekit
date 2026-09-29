@@ -10,6 +10,7 @@ STRINGS = {
     'nav_groups':               'Групи',
     'nav_people':               'Особи',
     'nav_exception':            'Виняток',
+    'nav_trainer_report':       'Звіт тренера',
     'nav_login':                'Увійти',
     'nav_register':             'Зареєструватися',
     'nav_profile':              'Профіль',
@@ -181,4 +182,20 @@ STRINGS = {
     'msg_exception_saved':      'Виняток для {date} збережено.',
     'msg_no_permission':        'Немає дозволу.',
     'msg_user_updated':         'Користувача оновлено.',
+
+    # ── Trainer report ────────────────────────────────────────────────────────
+    'trainer_report_title':       'Звіт тренера – огляд за квартал',
+    'trainer_report_prev':        'Попередній квартал',
+    'trainer_report_next':        'Наступний квартал',
+    'trainer_report_hint':        'Заняття, на яких вас позначено присутнім як тренера. Використовуйте цей список для внесення годин у зовнішній портал.',
+    'trainer_report_unmarked':    'Заняття, на яких вашу присутність ще не позначено (нижче не показані)',
+    'trainer_report_col_date':    'Дата',
+    'trainer_report_col_start':   'Початок',
+    'trainer_report_col_end':     'Кінець',
+    'trainer_report_col_hours':   'Год.',
+    'trainer_report_col_group':   'Група',
+    'trainer_report_col_location':'Місце',
+    'trainer_report_col_swimmers':'Плавців',
+    'trainer_report_empty':       'За цей квартал занять не знайдено.',
+    'trainer_report_total':       'Разом',
 }

@@ -20,4 +20,5 @@ urlpatterns = [
     path('exception/new/', views.exception_create, name='exception_create'),
     path('excuse/<uuid:token>/', views.use_excuse_token_view, name='use_excuse_token'),
     path('excuse/generate/', views.generate_excuse_token_view, name='generate_excuse_token'),
+    path('trainer/report/', views.trainer_report_view, name='trainer_report'),
 ]
