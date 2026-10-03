@@ -107,6 +107,16 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
                 'data': data,
             })
 
+        elif action == 'attendance_added':
+            # The row itself was created by session_add_swimmer_api; re-read it
+            # from the DB (never trust client payloads) and tell everyone.
+            att = await self.db_get_attendance(data.get('swimmer_id'))
+            if att:
+                await self.channel_layer.group_send(self.room_group, {
+                    'type': 'broadcast_sync_attendance',
+                    'data': {'added': [att], 'removed': []},
+                })
+
         elif action == 'mark_unknown_absent':
             result = await self.db_mark_unknown_absent()
             await self.channel_layer.group_send(self.room_group, {
@@ -238,6 +248,15 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
     def db_update_notes(self, data):
         from training.models import SessionInstance
         SessionInstance.objects.filter(pk=self.session_id).update(trainer_notes=data.get('notes', ''))
+
+    @database_sync_to_async
+    def db_get_attendance(self, swimmer_id):
+        from training.models import Attendance
+        att = (
+            Attendance.objects.select_related('swimmer', 'marked_by')
+            .filter(session_id=self.session_id, swimmer_id=swimmer_id).first()
+        )
+        return att.to_dict() if att else None
 
     @database_sync_to_async
     def db_mark_unknown_absent(self):

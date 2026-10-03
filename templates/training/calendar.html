@@ -13,9 +13,14 @@
   </div>
   <div class="d-flex gap-2 align-items-center flex-wrap">
     {% if user.is_authenticated %}
-    <button id="mySessionsToggle" class="btn btn-outline-primary btn-sm rounded-pill px-3">
-      <i class="bi bi-person-check me-1"></i>{{ t.btn_my_sessions }}
-    </button>
+    <div id="sessionScopeToggle" class="sc-pill-toggle" role="group" aria-label="{{ t.btn_my_sessions }}">
+      <button type="button" class="sc-pill-option active" data-scope="all">
+        <i class="bi bi-calendar3 me-1"></i>{{ t.btn_all_sessions }}
+      </button>
+      <button type="button" class="sc-pill-option" data-scope="my">
+        <i class="bi bi-person-check me-1"></i>{{ t.btn_my_sessions }}
+      </button>
+    </div>
     {% endif %}
     {% if user.is_authenticated and user.profile.is_trainer %}
     <a href="{% url 'exception_create' %}" class="btn btn-outline-danger btn-sm rounded-pill px-3">

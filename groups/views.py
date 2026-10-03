@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from translations.helpers import tr
 from .models import Group, GroupMembership
-from .forms import GroupForm, MembershipForm
+from .forms import GroupForm, GroupMemberCreateForm
 
 
 def group_list_view(request):
@@ -32,7 +32,6 @@ def group_detail_view(request, pk):
         'group': group, 'memberships': memberships, 'sessions': sessions,
         'is_trainer': is_trainer,
         'group_form': GroupForm(instance=group) if is_trainer else None,
-        'member_form': MembershipForm() if is_trainer else None,
     })
 
 
@@ -64,30 +63,6 @@ def group_create_view(request):
 
 
 @login_required
-def membership_add_view(request, group_pk):
-    group = get_object_or_404(Group, pk=group_pk)
-    is_trainer = GroupMembership.objects.filter(
-        group=group, swimmer__user=request.user, role=GroupMembership.ROLE_TRAINER
-    ).exists() or request.user.profile.is_admin
-    if not is_trainer:
-        messages.error(request, tr(request, 'msg_no_permission'))
-        return redirect('group_detail', pk=group_pk)
-    if request.method == 'POST':
-        form = MembershipForm(request.POST)
-        if form.is_valid():
-            m, created = GroupMembership.objects.get_or_create(
-                group=group, swimmer=form.cleaned_data['swimmer'],
-                defaults={'role': form.cleaned_data['role']},
-            )
-            if not created:
-                m.role = form.cleaned_data['role']
-                m.active = True
-                m.save()
-            messages.success(request, tr(request, 'msg_member_added', name=m.swimmer.full_name))
-    return redirect('group_detail', pk=group_pk)
-
-
-@login_required
 def membership_remove_view(request, group_pk, swimmer_pk):
     group = get_object_or_404(Group, pk=group_pk)
     is_trainer = GroupMembership.objects.filter(
@@ -100,3 +75,25 @@ def membership_remove_view(request, group_pk, swimmer_pk):
         GroupMembership.objects.filter(group=group, swimmer_id=swimmer_pk).update(active=False)
         messages.success(request, tr(request, 'msg_member_removed'))
     return redirect('group_detail', pk=group_pk)
+
+
+@login_required
+def group_member_create_view(request, group_pk):
+    """Create a new person and link them to this group in one step."""
+    group = get_object_or_404(Group, pk=group_pk)
+    is_trainer = GroupMembership.objects.filter(
+        group=group, swimmer__user=request.user,
+        role=GroupMembership.ROLE_TRAINER, active=True,
+    ).exists() or request.user.profile.is_admin
+    if not is_trainer:
+        messages.error(request, tr(request, 'msg_no_permission'))
+        return redirect('group_detail', pk=group_pk)
+    form = GroupMemberCreateForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        swimmer = form.save()
+        GroupMembership.objects.create(
+            group=group, swimmer=swimmer, role=form.cleaned_data['role'],
+        )
+        messages.success(request, tr(request, 'msg_member_added', name=swimmer.full_name))
+        return redirect('group_detail', pk=group_pk)
+    return render(request, 'groups/member_form.html', {'form': form, 'group': group})

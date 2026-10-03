@@ -65,22 +65,9 @@
 
       {% if is_trainer %}
       <div class="mt-3 pt-2">
-        <h6 class="fw-semibold mb-2 small text-muted">{{ t.add_member_heading }}</h6>
-        <form method="post" action="{% url 'membership_add' group.pk %}" class="d-flex gap-2 flex-wrap">
-          {% csrf_token %}
-          <select name="swimmer" class="form-select form-select-sm bg-transparent border-secondary text-light flex-grow-1">
-            {% for s in member_form.swimmer.field.queryset %}
-            <option value="{{ s.pk }}">{{ s.full_name }}</option>
-            {% endfor %}
-          </select>
-          <select name="role" class="form-select form-select-sm bg-transparent border-secondary text-light" style="max-width:140px">
-            <option value="swimmer">{{ t.role_swimmer }}</option>
-            <option value="trainer">{{ t.role_trainer }}</option>
-          </select>
-          <button class="btn btn-primary btn-sm rounded-pill px-3">
-            <i class="bi bi-plus-lg"></i> {{ t.btn_add_member }}
-          </button>
-        </form>
+        <a href="{% url 'group_member_create' group.pk %}" class="btn btn-primary btn-sm rounded-pill px-3">
+          <i class="bi bi-person-plus me-1"></i>{{ t.btn_add_member }}
+        </a>
       </div>
       {% endif %}
     </div>

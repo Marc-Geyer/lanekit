@@ -186,6 +186,12 @@ function applyPolledState(data) {
     }
   }
 
+  // Rows for people added mid-session (polling fallback has no WS "added" event)
+  const missing = (data.attendances || []).filter(
+    att => !document.getElementById(`att-row-${att.swimmer_id}`)
+  );
+  if (missing.length) handleSyncAttendance({ added: missing, removed: [] });
+
   (data.attendances || []).forEach(att => applyAttendanceUpdate(att));
   handleNotesUpdate({ notes: data.trainer_notes });
 }
@@ -306,6 +312,183 @@ window.syncAttendance = function () {
   const btn = document.getElementById('syncAttBtn');
   if (btn) { btn.disabled = true; btn.querySelector('i').className = 'bi bi-hourglass-split'; }
   wsSend('sync_attendance', {});
+};
+
+/* ── Quick add: new arrival / guest ───────────────────────────────────────── */
+
+let _addSwimmerSelectedId = null;
+
+// Lower-case, strip accents; "Müller" matches "muller" and "Mueller" is left to the user.
+function normalizeSearch(str) {
+  return String(str ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+// Every whitespace-separated token must appear somewhere in the name, in any
+// order — "mia ei" and "eins mia" both find "Mia Eins".
+function filterSwimmerOptions(people, query, limit) {
+  const tokens = normalizeSearch(query).split(/\s+/).filter(Boolean);
+  if (!tokens.length) return [];
+  return people
+    .filter(p => {
+      const hay = normalizeSearch(p.name);
+      return tokens.every(t => hay.includes(t));
+    })
+    .slice(0, limit || 8);
+}
+
+function getSwimmerOptions() {
+  const el = document.getElementById('addSwimmerData');
+  if (!el) return [];
+  if (!el._people) {
+    try { el._people = JSON.parse(el.textContent); } catch (e) { el._people = []; }
+  }
+  return el._people;
+}
+
+window.addSwimmerSearch = function () {
+  const input   = document.getElementById('addSwimmerExisting');
+  const results = document.getElementById('addSwimmerResults');
+  if (!input || !results) return;
+
+  _addSwimmerSelectedId = null;            // typing invalidates a previous pick
+  const q = input.value.trim();
+  results.textContent = '';
+  if (!q) return;
+
+  const hits = filterSwimmerOptions(getSwimmerOptions(), q, 8);
+  if (!hits.length) {
+    const none = document.createElement('div');
+    none.className = 'list-group-item bg-transparent border-secondary text-muted small';
+    none.textContent = UI_STRINGS.addSwimmerNoMatch;
+    results.append(none);
+    return;
+  }
+
+  hits.forEach(p => {
+    const listed = !!document.getElementById(`att-row-${p.id}`);
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'list-group-item list-group-item-action bg-transparent text-light border-secondary '
+                   + 'd-flex justify-content-between align-items-center gap-2 py-2';
+    const label = document.createElement('span');
+    label.textContent = p.name;
+    if (p.groups) {
+      const g = document.createElement('small');
+      g.className = 'text-muted ms-2';
+      g.textContent = p.groups;
+      label.append(g);
+    }
+    item.append(label);
+    if (listed) {
+      const badge = document.createElement('span');
+      badge.className = 'badge rounded-pill bg-secondary';
+      badge.textContent = UI_STRINGS.addSwimmerInList;
+      item.append(badge);
+    }
+    item.addEventListener('click', () => pickSwimmerOption(p, listed));
+    results.append(item);
+  });
+};
+
+function pickSwimmerOption(p, listed) {
+  const results = document.getElementById('addSwimmerResults');
+  if (listed) {
+    // Already on the list: jump to their row instead of adding twice.
+    const row = document.getElementById(`att-row-${p.id}`);
+    if (row) {
+      row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      row.style.outline = '2px solid var(--bs-warning, #ffc107)';
+      setTimeout(() => { row.style.outline = ''; }, 1800);
+    }
+    return;
+  }
+  _addSwimmerSelectedId = p.id;
+  document.getElementById('addSwimmerExisting').value = p.name;
+  if (results) results.textContent = '';
+  // Picking an existing person defaults to "guest" (no permanent membership).
+  const join = document.getElementById('addSwimmerJoin');
+  if (join) join.checked = false;
+}
+
+function showAddSwimmerMsg(text, cls, linkUrl) {
+  const el = document.getElementById('addSwimmerMsg');
+  if (!el) return;
+  el.className = `small text-${cls}`;
+  el.textContent = text;
+  if (linkUrl) {
+    el.append(' ');
+    const a = document.createElement('a');
+    a.href = linkUrl;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.textContent = UI_STRINGS.addSwimmerComplete;
+    el.append(a);
+  }
+}
+
+window.submitAddSwimmer = function () {
+  if (!window.SESSION_IS_TRAINER) return;
+  const val  = id => (document.getElementById(id)?.value || '').trim();
+  const btn  = document.getElementById('addSwimmerBtn');
+  const payload = { join_group: !!document.getElementById('addSwimmerJoin')?.checked };
+
+  const typed = val('addSwimmerExisting');
+  if (_addSwimmerSelectedId) {
+    payload.swimmer_id = _addSwimmerSelectedId;
+  } else if (typed) {
+    showAddSwimmerMsg(UI_STRINGS.addSwimmerPickList, 'warning');
+    return;
+  } else {
+    if (!val('addSwimmerFirst') || !val('addSwimmerLast')) {
+      showAddSwimmerMsg(UI_STRINGS.addSwimmerNeedName, 'warning');
+      return;
+    }
+    payload.first_name = val('addSwimmerFirst');
+    payload.last_name  = val('addSwimmerLast');
+    payload.phone      = val('addSwimmerPhone');
+  }
+
+  if (btn) btn.disabled = true;
+  fetch(`/training/session/${window._wsConn.instanceId}/add-swimmer/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+    body: JSON.stringify(payload),
+  })
+    .then(async r => {
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) { const e = new Error(body.error || 'failed'); e.status = r.status; e.body = body; throw e; }
+      return body;
+    })
+    .then(res => {
+      const att = res.attendance;
+      handleSyncAttendance({ added: [att], removed: [] });  // add row locally
+      applyAttendanceUpdate(att);                            // ...and make sure it shows "present"
+      wsSend('attendance_added', { swimmer_id: att.swimmer_id });  // tell the other devices
+      _addSwimmerSelectedId = null;
+      const resultsEl = document.getElementById('addSwimmerResults'); if (resultsEl) resultsEl.textContent = '';
+      ['addSwimmerExisting', 'addSwimmerFirst', 'addSwimmerLast', 'addSwimmerPhone']
+        .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+      const join = document.getElementById('addSwimmerJoin');
+      if (join) join.checked = true;
+      showAddSwimmerMsg(UI_STRINGS.addSwimmerDone.replace('{name}', att.swimmer_name), 'success',
+                        res.created ? res.swimmer_url : null);
+    })
+    .catch(err => {
+      if (err.status === 409 && err.body && err.body.error === 'duplicate') {
+        const free = (err.body.ids || []).map(id => getSwimmerOptions().find(p => p.id === id))
+          .filter(p => p && !document.getElementById(`att-row-${p.id}`));
+        if (free.length) {
+          _addSwimmerSelectedId = free[0].id;
+          document.getElementById('addSwimmerExisting').value = free[0].name;
+          showAddSwimmerMsg(UI_STRINGS.addSwimmerDuplicate, 'warning');
+        } else {
+          showAddSwimmerMsg(UI_STRINGS.addSwimmerAlreadyListed, 'warning');
+        }
+      } else {
+        showAddSwimmerMsg(UI_STRINGS.addSwimmerError, 'danger');
+      }
+    })
+    .finally(() => { if (btn) btn.disabled = false; });
 };
 
 function handleSyncAttendance(data) {
@@ -689,6 +872,12 @@ function initCollapsibleSections() {
 }
 window.initCollapsibleSections = initCollapsibleSections;
 
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
 function renderAttendanceRowHTML(att) {
   const sid = att.swimmer_id;
   const statuses = ['present', 'absent', 'excused', 'unknown'];
@@ -702,8 +891,8 @@ function renderAttendanceRowHTML(att) {
 
   return `
   <tr id="att-row-${sid}">
-    <td style="width:36px"><div class="sc-avatar-sm">${att.swimmer_initials}</div></td>
-    <td><div class="fw-medium small">${att.swimmer_name}</div></td>
+    <td style="width:36px"><div class="sc-avatar-sm">${escapeHtml(att.swimmer_initials)}</div></td>
+    <td><div class="fw-medium small">${escapeHtml(att.swimmer_name)}</div></td>
     <td class="text-end">
       <div class="d-flex gap-1 justify-content-end flex-wrap">${buttons}</div>
     </td>

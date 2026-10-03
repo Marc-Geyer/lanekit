@@ -4,8 +4,9 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.views.generic import TemplateView
 from django.http import JsonResponse
+from django.urls import reverse
 from django.contrib import messages
-from django.db.models import Q, OuterRef, Subquery
+from django.db.models import Q, OuterRef, Subquery, Prefetch
 from translations.helpers import tr
 
 from .models import (
@@ -258,6 +259,7 @@ def session_modal_view(request, session_id, session_date):
         'attendances': attendances,
         'is_trainer': is_trainer,
         'created': created,
+        'picker_options': _swimmer_picker_options() if (instance and is_trainer) else [],
     }, request=request)
 
     return JsonResponse({
@@ -320,6 +322,93 @@ def session_attendance_update_api(request, instance_id):
     att.marked_by = request.user
     att.save()
     return JsonResponse(att.to_dict())
+
+
+# ── Quick add: new arrival / guest during a session ──────────────────────────
+
+def _swimmer_picker_options():
+    """All active people as {id, name, groups} for the client-side search in the
+    "new / guest" panel. Whether someone is already on the attendance list is
+    decided in the browser from the rows currently shown, so it stays correct
+    when other devices add people live."""
+    people = Swimmer.objects.filter(active=True).prefetch_related(
+        Prefetch(
+            'groupmembership_set',
+            queryset=GroupMembership.objects.filter(active=True).select_related('group'),
+        )
+    ).order_by('last_name', 'first_name')
+    return [
+        {
+            'id': p.pk,
+            'name': f'{p.first_name} {p.last_name}'.strip(),
+            'groups': ', '.join(sorted({m.group.name for m in p.groupmembership_set.all()})),
+        }
+        for p in people
+    ]
+
+
+@login_required
+def session_add_swimmer_api(request, instance_id):
+    """Trainer adds a person to a running session and marks them present.
+
+    Body (JSON): either `swimmer_id` (existing person) or `first_name` +
+    `last_name` (+ optional `phone`) to create a new one; `join_group` makes
+    the person a permanent member of the session's group."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+
+    instance = get_object_or_404(
+        SessionInstance.objects.select_related('recurring_session__group'), pk=instance_id
+    )
+    recurring = instance.recurring_session
+    if not _is_session_trainer(request, recurring):
+        return JsonResponse({'error': 'forbidden'}, status=403)
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse({'error': 'invalid json'}, status=400)
+
+    created = False
+    if data.get('swimmer_id'):
+        swimmer = get_object_or_404(Swimmer, pk=data['swimmer_id'], active=True)
+    else:
+        first = str(data.get('first_name') or '').strip()[:100]
+        last = str(data.get('last_name') or '').strip()[:100]
+        if not first or not last:
+            return JsonResponse({'error': 'name_required'}, status=400)
+        duplicates = list(Swimmer.objects.filter(
+            first_name__iexact=first, last_name__iexact=last, active=True,
+        ).values_list('pk', flat=True))
+        if duplicates:
+            return JsonResponse({'error': 'duplicate', 'ids': duplicates}, status=409)
+        swimmer = Swimmer.objects.create(
+            first_name=first, last_name=last,
+            phone=str(data.get('phone') or '').strip()[:30],
+        )
+        created = True
+
+    joined = False
+    if data.get('join_group'):
+        membership, m_created = GroupMembership.objects.get_or_create(
+            group=recurring.group, swimmer=swimmer,
+        )
+        if not m_created and not membership.active:
+            membership.active = True
+            membership.save()
+        joined = True
+
+    att, _ = Attendance.objects.get_or_create(session=instance, swimmer=swimmer)
+    att.status = Attendance.STATUS_PRESENT
+    att.marked_by = request.user
+    att.save()
+
+    return JsonResponse({
+        'attendance': att.to_dict(),
+        'created': created,
+        'joined': joined,
+        'swimmer_url': reverse('swimmer_detail', args=[swimmer.pk]),
+    })
 
 
 # ── Training plan entry photo ─────────────────────────────────────────────────

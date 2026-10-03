@@ -2,7 +2,7 @@
 
 document.addEventListener('DOMContentLoaded', function () {
   const calendarEl = document.getElementById('calendar');
-  const toggleBtn  = document.getElementById('mySessionsToggle');
+  const scopeToggle = document.getElementById('sessionScopeToggle');
   let mySessionsMode = false;
 
   // ── FullCalendar ──────────────────────────────────────────────────────────
@@ -65,10 +65,15 @@ document.addEventListener('DOMContentLoaded', function () {
   calendar.render();
 
   // ── My sessions toggle ────────────────────────────────────────────────────
-  if (toggleBtn) {
-    toggleBtn.addEventListener('click', () => {
-      mySessionsMode = !mySessionsMode;
-      toggleBtn.classList.toggle('active', mySessionsMode);
+  if (scopeToggle) {
+    scopeToggle.addEventListener('click', (e) => {
+      const opt = e.target.closest('.sc-pill-option');
+      if (!opt) return;
+      const wantMy = opt.dataset.scope === 'my';
+      if (wantMy === mySessionsMode) return;
+      mySessionsMode = wantMy;
+      scopeToggle.querySelectorAll('.sc-pill-option').forEach(b =>
+        b.classList.toggle('active', b === opt));
       calendar.refetchEvents();
     });
   }
