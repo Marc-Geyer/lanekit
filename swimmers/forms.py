@@ -1,10 +1,11 @@
 from django import forms
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Submit, Row, Column, Field, HTML
+from swimmingclub.formats import EuropeanFormatsMixin
 from .models import Swimmer
 
 
-class SwimmerForm(forms.ModelForm):
+class SwimmerForm(EuropeanFormatsMixin, forms.ModelForm):
     class Meta:
         model = Swimmer
         fields = (
@@ -13,7 +14,6 @@ class SwimmerForm(forms.ModelForm):
             'emergency_contact_phone', 'notes', 'active',
         )
         widgets = {
-            'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
             'notes': forms.Textarea(attrs={'rows': 3}),
         }
 

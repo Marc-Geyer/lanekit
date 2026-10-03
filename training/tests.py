@@ -1,12 +1,14 @@
 from datetime import date, time
 
-from django.contrib.auth.models import User
-from django.test import TestCase
-from django.urls import reverse
+from .models import Attendance, Location
 
+from django.test import TestCase, Client
+from django.urls import reverse
+from django.contrib.auth.models import User
+from datetime import date, timedelta
+from training.models import RecurringSession, SessionInstance, ExcuseToken
 from groups.models import Group, GroupMembership
 from swimmers.models import Swimmer
-from .models import Attendance, Location, RecurringSession, SessionInstance
 
 
 class TrainerReportTests(TestCase):
@@ -74,3 +76,64 @@ class TrainerReportTests(TestCase):
         User.objects.create_user('plain', password='pw')
         self.client.login(username='plain', password='pw')
         self.assertNotContains(self.client.get(reverse('calendar')), reverse('trainer_report'))
+
+
+class TrainingViewsTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.admin = User.objects.create_superuser(username='admin', password='password')
+        self.trainer = User.objects.create_user(username='trainer', password='password')
+        self.trainer.profile.role = 'trainer'
+        self.trainer.profile.save()
+
+        self.group = Group.objects.create(name="Training Group", active=True)
+        self.swimmer = Swimmer.objects.create(user=self.trainer, first_name="T", last_name="R", active=True)
+        GroupMembership.objects.create(group=self.group, swimmer=self.swimmer, role='trainer', active=True)
+
+        self.recurring = RecurringSession.objects.create(
+            group=self.group,
+            day_of_week=0,
+            start_time="08:00",
+            end_time="09:00",
+            valid_from=date.today() - timedelta(days=1),
+            active=True
+        )
+
+    def test_calendar_events_api(self):
+        self.client.login(username='trainer', password='password')
+        url = reverse('calendar_events_api')
+        response = self.client.get(url, {'start': '2026-01-01', 'end': '2026-01-31'})
+        self.assertEqual(response.status_code, 200)
+        self.assertIsInstance(response.json(), list)
+
+    def test_session_modal_view(self):
+        self.client.login(username='trainer', password='password')
+        # Create an instance first for simple retrieval
+        inst = SessionInstance.objects.create(recurring_session=self.recurring, date=date.today())
+        url = reverse('session_modal_view',
+                      kwargs={'session_id': self.recurring.pk, 'session_date': date.today().isoformat()})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('html', response.json())
+
+    def test_use_excuse_token_view(self):
+        token_obj = ExcuseToken.objects.create(
+            swimmer=self.swimmer,
+            recurring_session=self.recurring,
+            date=date.today(),
+            token="testtoken"
+        )
+        response = self.client.post(reverse('use_excuse_token', kwargs={'token': 'testtoken'}))
+        self.assertRedirects(response, reverse('use_excuse_token', kwargs={'token': 'testtoken'}))
+        self.assertTrue(token_obj.refresh_from_db().used)
+
+    def test_generate_excuse_token_view(self):
+        self.client.login(username='trainer', password='password')
+        response = self.client.post(reverse('generate_excuse_token'), {
+            'swimmer_id': self.swimmer.pk,
+            'session_id': self.recurring.pk,
+            'date': date.today().isoformat(),
+            'reason': 'Sick'
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('token', response.json())
