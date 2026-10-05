@@ -1,8 +1,15 @@
-<!DOCTYPE html>
+{% load static %}<!DOCTYPE html>
 <html lang="{{ lang }}" dir="{% if is_rtl %}rtl{% else %}ltr{% endif %}" data-bs-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1e2327">
+  <link rel="manifest" href="{% url 'pwa_manifest' %}">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="{{ APP_NAME }}">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="{% static 'icons/apple-touch-icon.png' %}">
   <title>{% block title %}{{ SITE_TITLE }}{% endblock %} · {{ APP_NAME }}</title>
 
   {% if is_rtl %}
@@ -14,7 +21,6 @@
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&{% if lang == 'ar' %}family=Noto+Sans+Arabic:wght@300;400;500;700&{% endif %}display=swap" rel="stylesheet">
 
-  {% load static %}
   <link href="{% static 'css/custom.css' %}" rel="stylesheet">
   {% block extra_head %}{% endblock %}
 </head>
@@ -115,6 +121,9 @@
             {% if user.profile.is_admin %}
             <li><a class="dropdown-item" href="{% url 'user_list' %}">
               <i class="bi bi-people me-2"></i>{{ t.nav_user_mgmt }}
+            </a></li>
+            <li><a class="dropdown-item" href="{% url 'admin:index' %}">
+              <i class="bi bi-sliders2 me-2"></i>{{ t.nav_admin_page }}
             </a></li>
             {% endif %}
             <li><hr class="dropdown-divider"></li>
@@ -218,6 +227,11 @@ const UI_STRINGS = {
 
 {% load static %}
 <script src="{% static 'js/session.js' %}"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js', {scope: '/'}).catch(() => {}));
+}
+</script>
 {% block extra_js %}{% endblock %}
 </body>
 </html>

@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% load crispy_forms_tags %}
+{% block title %}{{ t.btn_new_swimmer }} – {{ group.name }}{% endblock %}
+{% block content %}
+<div class="mb-3">
+  <a href="{% url 'group_detail' group.pk %}" class="btn btn-sm btn-outline-secondary rounded-pill">
+    <i class="bi bi-arrow-left me-1"></i>{{ t.btn_back }}
+  </a>
+</div>
+<div class="sc-card p-4" style="max-width:680px;margin:0 auto">
+  <h4 class="fw-bold mb-1" style="font-family:'Syne',sans-serif">
+    <i class="bi bi-person-plus text-primary me-2"></i>{{ t.btn_new_swimmer }}
+  </h4>
+  <p class="mb-4">
+    <span class="badge rounded-pill" style="background:{{ group.color }}22; color:{{ group.color }}; border:1px solid {{ group.color }}55">
+      {{ group.name }}
+    </span>
+  </p>
+  {% crispy form %}
+</div>
+{% endblock %}

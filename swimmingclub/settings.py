@@ -119,6 +119,14 @@ ORGANISATION_NAME = os.environ.get('ORGANISATION_NAME', 'My Swimming Club')
 # Users can switch per-session via the navbar language picker.
 DEFAULT_LANGUAGE = os.environ.get('DEFAULT_LANGUAGE', 'de')
 
+# ── Sessions: stay logged in (important for the installed PWA) ───────────────
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 180      # ~6 months
+SESSION_SAVE_EVERY_REQUEST = True            # sliding expiry: renewed on each use
+SESSION_COOKIE_SAMESITE = 'Lax'
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'

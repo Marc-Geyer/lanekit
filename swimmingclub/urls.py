@@ -5,11 +5,16 @@ from django.conf.urls.static import static
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 from training.views import CalendarView
 from swimmingclub.views import set_language
+from swimmingclub import pwa
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', CalendarView.as_view(), name='calendar'),
     path('set-language/', set_language, name='set_language'),
+    # PWA – must live at the site root so the service worker scope is '/'
+    path('manifest.webmanifest', pwa.manifest, name='pwa_manifest'),
+    path('sw.js', pwa.service_worker, name='pwa_sw'),
+    path('offline/', pwa.offline, name='pwa_offline'),
     path('accounts/', include('accounts.urls')),
     path('swimmers/', include('swimmers.urls')),
     path('groups/', include('groups.urls')),
