@@ -23,11 +23,45 @@
       </a>
       {% endif %}
     </div>
+
+    {% if user.profile.is_admin %}
+    <div class="sc-card p-3 mt-3">
+      <h6 class="fw-semibold mb-3"><i class="bi bi-link-45deg text-primary me-2"></i>{{ t.link_section_title }}</h6>
+      {% if linked_swimmer %}
+      <p class="small mb-2">
+        <a href="{% url 'swimmer_detail' linked_swimmer.pk %}" class="text-decoration-none">{{ linked_swimmer.full_name }}</a>
+      </p>
+      <form method="post" action="{% url 'user_unlink_swimmer' target_user.pk %}"
+            onsubmit="return confirm('{{ t.confirm_unlink|escapejs }}')">
+        {% csrf_token %}
+        <button class="btn btn-outline-danger btn-sm rounded-pill w-100">
+          <i class="bi bi-link-45deg me-1"></i>{{ t.btn_unlink }}
+        </button>
+      </form>
+      {% else %}
+      <p class="text-muted small mb-2">{{ t.link_none }}</p>
+      <form method="post" action="{% url 'user_link_swimmer' target_user.pk %}">
+        {% csrf_token %}
+        <select name="swimmer" required
+                class="form-select form-select-sm bg-transparent border-secondary text-light mb-2">
+          <option value="">{{ t.link_select_ph }}</option>
+          {% for sw in unlinked_swimmers %}
+          <option value="{{ sw.pk }}">{{ sw.full_name }}{% if sw.email %} ({{ sw.email }}){% endif %}</option>
+          {% endfor %}
+        </select>
+        <button class="btn btn-primary btn-sm rounded-pill w-100">
+          <i class="bi bi-link-45deg me-1"></i>{{ t.btn_link }}
+        </button>
+      </form>
+      {% endif %}
+    </div>
+    {% endif %}
   </div>
   <div class="col-lg-8">
     <div class="sc-card p-4">
       <h5 class="fw-bold mb-4">{{ t.edit_user }}</h5>
       {% crispy form %}
+      <p class="text-muted small mt-3 mb-0"><i class="bi bi-info-circle me-1"></i>{{ t.email_change_hint }}</p>
     </div>
   </div>
 </div>

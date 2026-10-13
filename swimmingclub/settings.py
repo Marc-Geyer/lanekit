@@ -149,8 +149,20 @@ if _domain:
 
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', f'info@{APP_NAME.lower()}.com')
 
-# DEBUG: emails get printed into console
-if DEBUG:
+# ── E-mail (account activation, e-mail change verification) ──────────────────
+# Configure an SMTP server via env vars. Without EMAIL_HOST: in DEBUG mails are
+# printed to the console, in production Django falls back to localhost:25 which
+# normally has no mail server -> sending fails (the app shows an error message).
+EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False') == 'True'      # port 465
+EMAIL_USE_TLS = (os.environ.get('EMAIL_USE_TLS', 'True') == 'True') and not EMAIL_USE_SSL  # port 587
+EMAIL_TIMEOUT = 10   # seconds – never let a request hang on an unreachable SMTP server
+if EMAIL_HOST:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+elif DEBUG:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 LOGGING = {

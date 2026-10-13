@@ -11,7 +11,7 @@
 #   • Run from the project root directory (where docker-compose.prod.yml lives)
 #   • .env file present with DOMAIN, CERTBOT_EMAIL, CERTBOT_STAGING_FLAG set
 #   • Ports 80 and 443 reachable from the internet
-#   • DNS A record for $DOMAIN pointing to this server
+#   • DNS A record for $DOMAIN (and every domain in ALIAS_DOMAINS) pointing to this server
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -33,11 +33,18 @@ DOMAIN="${DOMAIN:?DOMAIN must be set in .env}"
 EMAIL="${CERTBOT_EMAIL:?CERTBOT_EMAIL must be set in .env}"
 STAGING_FLAG="${CERTBOT_STAGING_FLAG---staging}"   # default to staging for safety
 
+# Optional alias domains (redirected to $DOMAIN) are added to the same certificate.
+DOMAIN_ARGS="-d ${DOMAIN}"
+for alias in ${ALIAS_DOMAINS:-}; do
+  DOMAIN_ARGS="${DOMAIN_ARGS} -d ${alias}"
+done
+
 COMPOSE="docker compose -f docker-compose.prod.yml"
 
 echo "══════════════════════════════════════════════════════"
 echo " LaneKit – Let's Encrypt certificate initialisation"
 echo " Domain : $DOMAIN"
+echo " Aliases: ${ALIAS_DOMAINS:-(none)}"
 echo " Email  : $EMAIL"
 echo " Mode   : ${STAGING_FLAG:-(PRODUCTION – real certificate)}"
 echo "══════════════════════════════════════════════════════"
@@ -56,7 +63,6 @@ mkdir -p ./docker/certbot/www
 
 # ── 2. Create a temporary self-signed certificate ────────────────────────────
 # nginx won't start without something at the cert paths; we replace it next.
-echo "▶ Generating temporary self-signed certificate for $DOMAIN…"
 echo "▶ Generating temporary self-signed certificate for $DOMAIN…"
 $COMPOSE run --rm --no-deps --entrypoint \
   "sh -c 'mkdir -p /etc/letsencrypt/live/${DOMAIN} && openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
@@ -86,7 +92,7 @@ $COMPOSE run --rm --no-deps --entrypoint \
    --webroot -w /var/www/certbot \
    ${STAGING_FLAG} \
    --email ${EMAIL} \
-   -d ${DOMAIN} \
+   ${DOMAIN_ARGS} \
    --rsa-key-size 4096 \
    --agree-tos \
    --force-renewal \

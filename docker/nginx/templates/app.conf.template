@@ -1,6 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # LaneKit – nginx site config
-# ${DOMAIN} is substituted at container startup from the DOMAIN env variable.
+# ${DOMAIN} (primary) and ${ALIAS_DOMAINS} (space separated, redirected to the
+# primary domain) are substituted at container startup from env variables.
 # ─────────────────────────────────────────────────────────────────────────────
 
 upstream lanekit_app {
@@ -15,7 +16,7 @@ limit_req_zone $binary_remote_addr zone=login:10m rate=10r/m;
 server {
     listen 80;
     listen [::]:80;
-    server_name ${DOMAIN} www.${DOMAIN};
+    server_name ${DOMAIN} www.${DOMAIN} ${ALIAS_DOMAINS};
 
     # Certbot webroot challenge (must be reachable over plain HTTP)
     location /.well-known/acme-challenge/ {
@@ -26,6 +27,22 @@ server {
     location / {
         return 301 https://${DOMAIN}$request_uri;
     }
+}
+
+# ── HTTPS: alias domains → permanent redirect to the primary domain ──────────
+# The certificate of the primary domain also covers the aliases (see
+# docker/certbot/init-letsencrypt.sh), so it is reused here.
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2  on;
+    server_name ${ALIAS_DOMAINS};
+
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+
+    return 301 https://${DOMAIN}$request_uri;
 }
 
 # ── HTTPS ─────────────────────────────────────────────────────────────────────

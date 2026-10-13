@@ -68,6 +68,6 @@ def update_user_profile(sender, instance, **kwargs):
             return
         person.first_name = instance.user.first_name
         person.last_name = instance.user.last_name
-        # TODO verified email change
+        # e-mail is synced separately, only after verification (accounts.views.apply_email_change)
         person.phone = instance.phone
         person.save()

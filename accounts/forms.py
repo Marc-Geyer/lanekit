@@ -5,6 +5,9 @@ from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Submit, Row, Column, Field
 from .models import UserProfile
 
+# Form errors cannot use tr(request, ...); keep the text German like the other form labels.
+EMAIL_IN_USE_MSG = 'Diese E-Mail-Adresse wird bereits von einem anderen Konto verwendet.'
+
 
 class StyledAuthForm(AuthenticationForm):
     def __init__(self, *args, **kwargs):
@@ -25,6 +28,12 @@ class RegisterForm(UserCreationForm):
     class Meta:
         model = User
         fields = ('username', 'first_name', 'last_name', 'email', 'password1', 'password2')
+
+    def clean_email(self):
+        email = self.cleaned_data['email'].strip()
+        if User.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError(EMAIL_IN_USE_MSG, code='email_in_use')
+        return email
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -51,7 +60,12 @@ class UserProfileForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
+        # Only admins may change the role – otherwise any user could promote themselves.
+        can_edit_role = kwargs.pop('can_edit_role', False)
         super().__init__(*args, **kwargs)
+        self._user = user
+        if not can_edit_role:
+            self.fields['role'].disabled = True   # disabled fields ignore POSTed values
         if user:
             self.fields['first_name'].initial = user.first_name
             self.fields['last_name'].initial = user.last_name
@@ -66,8 +80,26 @@ class UserProfileForm(forms.ModelForm):
             Submit('submit', 'Speichern', css_class='btn btn-primary'),
         )
 
+    def clean_email(self):
+        email = self.cleaned_data['email'].strip()
+        others = User.objects.filter(email__iexact=email)
+        if self._user is not None:
+            others = others.exclude(pk=self._user.pk)
+        if others.exists():
+            raise forms.ValidationError(EMAIL_IN_USE_MSG, code='email_in_use')
+        return email
+
+    def email_changed(self):
+        """True if the submitted e-mail differs from the account's current one."""
+        return (
+            self._user is not None
+            and self.cleaned_data['email'].lower() != (self._user.email or '').lower()
+        )
+
     def save_user_fields(self, user):
+        """Save the name fields. The e-mail is deliberately NOT written here: changes go
+        through verification (own account) or apply_email_change() (admin), which also
+        keeps the linked person's e-mail in sync."""
         user.first_name = self.cleaned_data['first_name']
         user.last_name = self.cleaned_data['last_name']
-        user.email = self.cleaned_data['email']
         user.save()
