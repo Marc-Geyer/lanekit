@@ -45,6 +45,9 @@ class CalendarView(TemplateView):
 
 # ── Calendar events API (FullCalendar feed) ──────────────────────────────────
 
+MAX_CALENDAR_RANGE_DAYS = 366  # guards against unbounded range queries on this public endpoint
+
+
 def calendar_events_api(request):
     """Return JSON array of FullCalendar events for a date range."""
     try:
@@ -52,6 +55,9 @@ def calendar_events_api(request):
         end_date = date.fromisoformat(request.GET.get('end', str(date.today() + timedelta(days=30)))[:10])
     except ValueError:
         return JsonResponse({'error': 'invalid dates'}, status=400)
+
+    if end_date < start_date or (end_date - start_date).days > MAX_CALENDAR_RANGE_DAYS:
+        return JsonResponse({'error': 'date range too large'}, status=400)
 
     my_sessions = request.GET.get('my_sessions') == '1' and request.user.is_authenticated
 
@@ -413,6 +419,24 @@ def session_add_swimmer_api(request, instance_id):
 
 # ── Training plan entry photo ─────────────────────────────────────────────────
 
+def _validate_photo(photo):
+    """Verify an uploaded file is actually a decodable image (not just named one).
+
+    Assigning straight to an ImageField on a model instance skips Django's usual
+    form-level validation, so a renamed non-image file would otherwise be stored
+    and served back as-is from /media/. Uses the same check django.forms.ImageField
+    does internally (Pillow decode), then rewinds the file for saving.
+    """
+    from django.forms import ImageField as ImageFormField
+    from django.core.exceptions import ValidationError
+    try:
+        ImageFormField().clean(photo)
+    except ValidationError:
+        return False
+    photo.seek(0)
+    return True
+
+
 @login_required
 def plan_entry_photo_view(request, entry_id):
     """Upload (POST, multipart) or remove (DELETE) the photo for a plan entry."""
@@ -428,6 +452,8 @@ def plan_entry_photo_view(request, entry_id):
         photo = request.FILES.get('photo')
         if not photo:
             return JsonResponse({'error': 'no file provided'}, status=400)
+        if not _validate_photo(photo):
+            return JsonResponse({'error': 'invalid image file'}, status=400)
         if entry.photo:
             entry.photo.delete(save=False)
         entry.photo = photo
@@ -467,6 +493,8 @@ def plan_entry_photo_create_view(request, instance_id):
     photo = request.FILES.get('photo')
     if not photo:
         return JsonResponse({'error': 'no file provided'}, status=400)
+    if not _validate_photo(photo):
+        return JsonResponse({'error': 'invalid image file'}, status=400)
 
     last = TrainingPlanEntry.objects.filter(session=instance).order_by('order').last()
     entry = TrainingPlanEntry.objects.create(

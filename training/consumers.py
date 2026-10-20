@@ -41,10 +41,13 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
         if action == 'update_attendance':
 
             result = await self.db_update_attendance(data)
-            await self.channel_layer.group_send(self.room_group, {
-                'type': 'broadcast_attendance',
-                'data': result,
-            })
+            if result is not None:
+                await self.channel_layer.group_send(self.room_group, {
+                    'type': 'broadcast_attendance',
+                    'data': result,
+                })
+            else:
+                await self.send_json({'type': 'error', 'message': 'Keine Berechtigung'})
 
         elif action == 'add_plan_entry':
             entry = await self.db_add_plan_entry(data)
@@ -194,11 +197,32 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
 
     @database_sync_to_async
     def db_update_attendance(self, data):
+        """Update an attendance row for this session.
+
+        Restricted to swimmers who legitimately belong here: either an active
+        member of the session's group, or someone already carrying an
+        Attendance row for this exact session (a guest added via
+        session_add_swimmer_api, who may not be a group member at all).
+        Returns None — and sends no broadcast — if neither applies, so a
+        trainer can't fabricate attendance for an unrelated swimmer_id.
+        """
         from training.models import SessionInstance, Attendance
         from swimmers.models import Swimmer
+        from groups.models import GroupMembership
         from django.contrib.auth.models import User
-        session = SessionInstance.objects.get(pk=self.session_id)
-        swimmer = Swimmer.objects.get(pk=data['swimmer_id'])
+        session = SessionInstance.objects.select_related('recurring_session__group').get(pk=self.session_id)
+        swimmer_id = data['swimmer_id']
+
+        is_group_member = GroupMembership.objects.filter(
+            group=session.recurring_session.group, swimmer_id=swimmer_id, active=True,
+        ).exists()
+        is_existing_guest = Attendance.objects.filter(
+            session=session, swimmer_id=swimmer_id,
+        ).exists()
+        if not (is_group_member or is_existing_guest):
+            return None
+
+        swimmer = Swimmer.objects.get(pk=swimmer_id)
         att, _ = Attendance.objects.get_or_create(session=session, swimmer=swimmer)
         att.status = data['status']
         att.notes = data.get('notes', '')

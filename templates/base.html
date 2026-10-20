@@ -233,5 +233,13 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 {% block extra_js %}{% endblock %}
+
+<!-- Bot trap: invisible to real visitors (off-screen, aria-hidden, not
+     tab-reachable) and disallowed in /robots.txt, so neither a sighted
+     user, a screen-reader user, nor a compliant crawler ever reaches it.
+     A scraper that parses raw HTML links regardless will — and gets its
+     IP blocked. See antibot/views.py. -->
+<a href="{% url 'honeypot_trap' %}" aria-hidden="true" tabindex="-1" rel="nofollow"
+   style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden;">Datenexport</a>
 </body>
 </html>

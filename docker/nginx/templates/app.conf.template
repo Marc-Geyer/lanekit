@@ -11,6 +11,7 @@ upstream lanekit_app {
 
 # ── Rate limiting zones ───────────────────────────────────────────────────────
 limit_req_zone $binary_remote_addr zone=login:10m rate=10r/m;
+limit_req_zone $binary_remote_addr zone=register:10m rate=5r/m;
 
 # ── HTTP → HTTPS redirect + ACME challenge ────────────────────────────────────
 server {
@@ -105,6 +106,16 @@ server {
     # ── Login endpoint – rate-limited ─────────────────────────────────────────
     location /accounts/login/ {
         limit_req zone=login burst=5 nodelay;
+        proxy_pass         http://lanekit_app;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+
+    # ── Registration endpoint – rate-limited (sends e-mail; abuse = spam) ─────
+    location /accounts/register/ {
+        limit_req zone=register burst=3 nodelay;
         proxy_pass         http://lanekit_app;
         proxy_set_header   Host              $host;
         proxy_set_header   X-Real-IP         $remote_addr;

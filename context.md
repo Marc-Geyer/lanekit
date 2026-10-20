@@ -12,7 +12,7 @@
 | **Repo** | https://github.com/Marc-Geyer/lanekit |
 | **Purpose** | Self-hosted Django app for managing swimming groups, training sessions, live attendance, and club members |
 | **License** | GPL-3.0 |
-| **Django version** | 4.2 (ASGI via Daphne + Django Channels 4) |
+| **Django version** | 6.0 (ASGI via Daphne + Django Channels 4) |
 
 ---
 
@@ -20,7 +20,7 @@
 
 | Layer | Technology |
 |---|---|
-| Backend | Django 4.2, Django Channels 4 |
+| Backend | Django 6.0, Django Channels 4 |
 | ASGI server | Daphne 4 |
 | WebSockets | channels-redis 4 + **redis-py 4.x** (pinned `<5.0`) |
 | Database | PostgreSQL 16 |
@@ -42,6 +42,8 @@ training/    RecurringSession, SessionException, SessionInstance,
              TrainingPlanEntry, Attendance, ExcuseToken
              └── consumers.py  SessionConsumer (WebSocket)
              └── routing.py    WebSocket URL patterns
+antibot/     Scraper honeypot — BlockedIP model, HoneypotBlockMiddleware,
+             trap view linked only via a hidden link in base.html + robots.txt
 translations/ Custom i18n package (NOT Django gettext – see below)
 ```
 
@@ -102,16 +104,30 @@ translations/
 | URL | View / Purpose |
 |---|---|
 | `/` | Calendar main page |
-| `/training/events/` | FullCalendar JSON feed |
+| `/training/events/` | FullCalendar JSON feed — public/read-only, capped at 366-day range |
 | `/training/session/<id>/<date>/` | Session modal — returns JSON `{html, instance_id, is_trainer}` |
 | `/training/session/<id>/state/` | Polling fallback — returns current attendance + plan state |
 | `/training/session/<id>/attendance/` | REST attendance update (polling fallback for WS writes) |
+| `/training/session/<id>/add-swimmer/` | Trainer: add a swimmer to the live session |
+| `/training/session/<id>/plan-entry/photo-create/` | Trainer: new plan entry from a photo |
+| `/training/plan-entry/<id>/photo/` | Trainer: upload/remove a plan entry's photo |
+| `/training/recurring/new/<group_id>/`, `/training/recurring/<id>/edit/` | Trainer: manage recurring sessions |
+| `/training/exception/new/` | Trainer: create a session exception |
+| `/training/trainer/report/` | Trainer: quarterly attendance report (time-reporting export) |
+| `/training/excuse/generate/` | Trainer: generate a self-excuse link |
 | `/ws/session/<instance_id>/` | WebSocket endpoint |
 | `/set-language/?lang=xx` | Switch UI language (stored in session) |
 | `/groups/` | Group list |
 | `/swimmers/` | People search/list |
-| `/accounts/login/` | Login |
-| `/excuse/<uuid>/` | Self-excuse (no login required) |
+| `/accounts/login/` | Login (nginx rate-limited) |
+| `/accounts/register/` | Self-registration, only for known `Swimmer` e-mails (nginx rate-limited) |
+| `/accounts/activate/<uidb64>/<token>/` | Account activation link |
+| `/accounts/verify-email/<token>/` | E-mail change confirmation (signed token) |
+| `/accounts/profile/`, `/accounts/users/`, `/accounts/users/<id>/` | Own profile / admin user management |
+| `/excuse/<uuid>/` | Self-excuse (no login required, single-use UUIDv4) |
+| `/manifest.webmanifest`, `/sw.js`, `/offline/` | PWA assets |
+| `/robots.txt` | Disallows `/admin/` and `/system/` (the honeypot prefix) |
+| `/system/data-export/` | Honeypot trap (antibot app) — not a real endpoint, do not link to it |
 | `/admin/` | Django admin |
 
 ---
@@ -165,7 +181,18 @@ Navbar shows `OrgName [LaneKit]` when `ORGANISATION_NAME` is set, else just `Lan
 
 ## Open / TODO
 
-- [ ] Push source code to github.com/Marc-Geyer/lanekit
-- [ ] Document account security additions (login requirements on persons/calendar — added locally, not yet in context)
 - [ ] Form field labels are hardcoded in the form classes (not translated) — full translation would require Django's gettext on model verbose_names
-- [ ] Production deployment not yet tested end-to-end
+- [ ] Consider validating uploaded training-plan photos for size/dimensions too (currently only checked for being a decodable image, no explicit max-resolution guard beyond nginx's 20M body limit)
+- [ ] Consider whether `/accounts/register/`'s "e-mail already in use" message (and the equivalent in `UserProfileForm`) should be worded less specifically to reduce account enumeration — accepted as a low-severity trade-off for now in a club-internal tool
+
+## Security review (Oct 2026)
+
+A pass over `swimmingclub/settings.py`, nginx config, `SessionConsumer`, the excuse-token flow, and account/registration views found and fixed:
+- `accounts/views.py::check_trainer_status` — `==` instead of `=` meant trainer role promotion on login silently never happened
+- `training/views.py::calendar_events_api` — unbounded `start`/`end` date range on a public endpoint could force an expensive query; capped at 366 days
+- `training/consumers.py::db_update_attendance` — a trainer could write an attendance row for a `swimmer_id` outside their session's group; now scoped to swimmers who are either group members **or** already have an attendance row for this session (covers non-member guests added via "add swimmer" — first fix was too strict and broke that case, corrected same day)
+- `training/views.py` photo upload views — files were saved to the `ImageField` without validation (direct model assignment skips Django's form-level Pillow check); added `_validate_photo()`
+- nginx — `/accounts/register/` had no rate limit (only `/accounts/login/` did), despite sending e-mail; added a `register` zone
+- Added a scraper honeypot: new `antibot` app (`BlockedIP` model + `HoneypotBlockMiddleware`), a hidden trap link in `base.html`, and `/robots.txt` disallowing the trap path and `/admin/`. 24h IP block on a hit, visible/removable in Django admin under "Bot-Schutz".
+
+See the README's new **Security** section for what's already in place. Nothing above was found to be currently exploitable from outside without a trainer/admin account, except the calendar DoS vector and the registration spam vector, both unauthenticated.

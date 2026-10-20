@@ -15,6 +15,7 @@ A self-hosted Django application for managing swimming groups, training sessions
 - [Git on the server](#git-on-the-server)
 - [Running without Docker](#running-without-docker)
 - [Key URLs](#key-urls)
+- [Security](#security)
 - [How it works](#how-it-works)
 
 ---
@@ -393,14 +394,49 @@ python manage.py runserver
 | URL | Description |
 |---|---|
 | `/` | Calendar (main page) |
-| `/training/events/?start=…&end=…` | Calendar event JSON API (FullCalendar feed) |
-| `/training/session/<id>/<date>/` | Session modal content – GET=view, POST=create instance |
+| `/training/events/?start=…&end=…` | Calendar event JSON API (FullCalendar feed, read-only for anonymous users) |
+| `/training/session/<id>/<date>/` | Session modal content – GET=view, POST=create instance (trainer) |
+| `/training/session/<id>/state/` | Polling fallback – current attendance + plan state (used when the WebSocket drops) |
+| `/training/session/<id>/attendance/` | REST attendance update – polling fallback for WebSocket writes |
+| `/training/session/<id>/add-swimmer/` | Trainer: add a swimmer to the live session |
+| `/training/session/<id>/plan-entry/photo-create/` | Trainer: create a plan entry directly from a photo |
+| `/training/plan-entry/<id>/photo/` | Trainer: upload/remove the photo of a plan entry |
+| `/training/recurring/new/<group_id>/`, `/training/recurring/<id>/edit/` | Trainer: create/edit a recurring session |
+| `/training/exception/new/` | Trainer: create a session exception (cancellation) |
+| `/training/trainer/report/` | Trainer: quarterly attendance report |
 | `/ws/session/<instance_id>/` | WebSocket endpoint (live attendance + training plan) |
 | `/groups/` | Group list |
 | `/swimmers/` | People search |
-| `/accounts/login/` | Login |
-| `/excuse/<uuid>/` | Self-excuse link (no login needed) |
+| `/accounts/login/` | Login (rate-limited) |
+| `/accounts/register/` | Self-registration – only for people already known as a `Swimmer` by e-mail (rate-limited) |
+| `/accounts/activate/<uidb64>/<token>/` | Account activation link (from the registration e-mail) |
+| `/accounts/verify-email/<token>/` | Confirms an e-mail address change (signed token, 3-day validity) |
+| `/accounts/profile/` | Own profile, incl. e-mail change (triggers re-verification) |
+| `/accounts/users/`, `/accounts/users/<id>/` | Admin: user list / detail, incl. linking a user to a `Swimmer` |
+| `/excuse/<uuid>/` | Self-excuse link (no login needed, single-use UUIDv4 token) |
+| `/excuse/generate/` | Trainer: generate a self-excuse link for a swimmer |
+| `/set-language/?lang=xx` | Switch UI language (stored in session) |
+| `/manifest.webmanifest`, `/sw.js`, `/offline/` | PWA manifest, service worker, offline fallback page |
 | `/admin/` | Django admin |
+
+---
+
+## Security
+
+LaneKit is reachable from the public internet without a VPN, so the following is in place — and worth knowing about if you deploy it yourself:
+
+- **Transport** — TLS 1.2/1.3 only, HSTS (`includeSubDomains; preload`), and the usual hardening headers (`X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`) are set in `docker/nginx/templates/app.conf.template`.
+- **Rate limiting** — `/accounts/login/` and `/accounts/register/` are rate-limited per client IP at the nginx layer (`limit_req_zone`), since both can be abused to brute-force or to spam e-mails.
+- **Sessions & CSRF** — Session cookies are `SameSite=Lax` and, outside `DEBUG`, `Secure`; `CSRF_TRUSTED_ORIGINS` is derived from `DOMAIN`. Sessions live ~6 months with sliding expiry, by design, so the installed PWA stays logged in.
+- **Self-excuse tokens** — `/excuse/<uuid>/` uses a random UUIDv4 per token (122 bits), single-use, and scoped to one `(swimmer, session, date)` triple — not practically guessable.
+- **WebSocket authorization** — `SessionConsumer` only accepts authenticated connections and verifies the user is an active trainer of that session's group at `connect()`; every subsequent action re-checks `is_trainer` before touching the database. Attendance writes are restricted to swimmers who are either active members of that group *or* already have an attendance row for this exact session — the latter covers guests added on the fly via "add swimmer" who aren't group members at all.
+- **Calendar API** — `/training/events/` is intentionally public/read-only (see *How It Works* below) but rejects date ranges over 366 days to prevent a single request from forcing an expensive, unbounded query.
+- **Uploaded photos** — training-plan photos are verified to be decodable images (Pillow) before being stored, not just trusted by filename/content-type.
+- **Scraper honeypot** (`antibot` app) — a link invisible to real visitors (off-screen, `aria-hidden`, not tab-reachable) sits in `base.html`, and its path is disallowed in `/robots.txt`. Anything that requests it anyway — a scraper ignoring `robots.txt`, or one blindly following every raw `<a href>` — gets its IP blocked for 24h by `HoneypotBlockMiddleware`, applied to every route. Blocked IPs are visible/removable under **Admin → Bot-Schutz → Blocked IPs**, in case a shared IP (NAT, corporate proxy) ever trips it.
+- **Secrets** — `.env` is git- and docker-ignored; `DB_PASSWORD`, `SECRET_KEY`, SMTP and superuser credentials only ever reach the containers as environment variables, never baked into the image.
+- **Known, accepted trade-offs** — the Django admin stays at the default `/admin/` path (protected by normal Django auth, not by obscurity, though it's also listed in `robots.txt`'s `Disallow`); registration e-mail confirms whether an address is already registered (minor enumeration, acceptable for a club-internal tool); the honeypot is one layer, not a general bot defense — a scraper that renders the page with full CSS and only follows visibly-clickable links won't trip it.
+
+If you find a vulnerability, please report it privately to the maintainer rather than opening a public issue.
 
 ---
 

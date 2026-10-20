@@ -50,7 +50,7 @@ def check_trainer_status(user: User):
         return
     # Don't overwrite admin status
     if not user.profile.role == UserProfile.ROLE_ADMIN:
-        user.profile.role == UserProfile.ROLE_TRAINER
+        user.profile.role = UserProfile.ROLE_TRAINER
         user.profile.save()
 
 def logout_view(request):

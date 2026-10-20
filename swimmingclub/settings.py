@@ -25,10 +25,12 @@ INSTALLED_APPS = [
     'swimmers',
     'groups',
     'training',
+    'antibot',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'antibot.middleware.HoneypotBlockMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
