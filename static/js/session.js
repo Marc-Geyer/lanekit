@@ -39,24 +39,37 @@ function connectSessionWebSocket() {
   stopStatePolling();
   setWsStatus('connecting', WS_STRINGS.connecting);
 
+  // Guard: never keep two sockets alive for the same client. A leftover
+  // socket (e.g. still CONNECTING when visibilitychange/online/manual
+  // reconnect fires) would deliver every broadcast a second time.
+  if (conn.ws) {
+    const old = conn.ws;
+    old.onopen = old.onclose = old.onerror = old.onmessage = null;
+    try { old.close(); } catch (e) { /* already closed */ }
+    conn.ws = null;
+  }
+
   const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
   const ws = new WebSocket(`${wsProtocol}://${location.host}/ws/session/${conn.instanceId}/`);
   conn.ws = ws;
   window._sessionWS = ws; // kept for backwards compatibility
 
   ws.onopen = () => {
+    if (conn.ws !== ws) return; // stale socket
     conn.reconnectAttempts = 0;
     setWsStatus('connected', WS_STRINGS.live);
     flushPendingAttendanceQueue();
   };
   ws.onclose = () => {
+    if (conn.ws !== ws) return; // stale socket – must not trigger a reconnect
     conn.ws = null;
     window._sessionWS = null;
     scheduleSessionReconnect();
   };
-  ws.onerror = () => setWsStatus('error', WS_STRINGS.error);
+  ws.onerror = () => { if (conn.ws === ws) setWsStatus('error', WS_STRINGS.error); };
 
   ws.onmessage = (event) => {
+    if (conn.ws !== ws) return; // stale socket – ignore its messages
     const msg = JSON.parse(event.data);
     switch (msg.type) {
       case 'init':
@@ -742,6 +755,15 @@ function handlePlanAdd(entry) {
   window._planCache = window._planCache || {};
   window._planCache[entry.id] = entry;
   const container = document.getElementById('planEntriesContainer');
+  if (!container) return;
+  // Idempotency guard: the same entry may arrive more than once (duplicate
+  // socket, WS + polling overlap, re-broadcast). Update in place instead of
+  // inserting a second row.
+  const existing = container.querySelector(`.plan-entry-row[data-entry-id="${entry.id}"]`);
+  if (existing) {
+    existing.outerHTML = renderPlanEntryHTML(entry);
+    return;
+  }
   const empty = document.getElementById('emptyPlan');
   if (empty) empty.remove();
   container.insertAdjacentHTML('beforeend', renderPlanEntryHTML(entry));
