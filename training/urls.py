@@ -7,6 +7,8 @@ urlpatterns = [
          views.session_state_api, name='session_state_api'),
     path('session/<int:instance_id>/attendance/',
          views.session_attendance_update_api, name='session_attendance_update_api'),
+    path('session/<int:instance_id>/settings/',
+         views.session_settings_api, name='session_settings_api'),
     path('session/<int:instance_id>/plan-entry/photo-create/',
          views.plan_entry_photo_create_view, name='plan_entry_photo_create'),
     path('session/<int:instance_id>/add-swimmer/',
@@ -22,5 +24,6 @@ urlpatterns = [
     path('exception/new/', views.exception_create, name='exception_create'),
     path('excuse/<uuid:token>/', views.use_excuse_token_view, name='use_excuse_token'),
     path('excuse/generate/', views.generate_excuse_token_view, name='generate_excuse_token'),
+    path('group/<int:group_pk>/stats/', views.group_stats_view, name='group_stats'),
     path('trainer/report/', views.trainer_report_view, name='trainer_report'),
 ]

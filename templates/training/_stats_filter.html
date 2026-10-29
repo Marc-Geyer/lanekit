@@ -1,0 +1,43 @@
+{# Shared statistics filter. Context: f (filter_context), show_lanes_toggle #}
+<form method="get" action="#stats" class="sc-card p-3 mb-3">
+  <input type="hidden" name="range" value="{{ f.range }}">
+  <div class="d-flex flex-wrap gap-2 mb-2">
+    <button name="range" value="prev_month"
+            class="btn btn-sm rounded-pill {% if f.range == 'prev_month' %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ t.stats_range_prev_month }}</button>
+    <button name="range" value="30d"
+            class="btn btn-sm rounded-pill {% if f.range == '30d' %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ t.stats_range_30d }}</button>
+    <button name="range" value="prev_quarter"
+            class="btn btn-sm rounded-pill {% if f.range == 'prev_quarter' %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ t.stats_range_prev_quarter }}</button>
+    <button name="range" value="this_quarter"
+            class="btn btn-sm rounded-pill {% if f.range == 'this_quarter' %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ t.stats_range_this_quarter }}</button>
+  </div>
+  <div class="d-flex flex-wrap align-items-end gap-2 mb-2">
+    <div>
+      <label class="form-label small text-muted mb-0">{{ t.stats_from }}</label>
+      <input type="date" name="from" value="{{ f.start|date:'Y-m-d' }}"
+             class="form-control form-control-sm bg-transparent border-secondary text-light">
+    </div>
+    <div>
+      <label class="form-label small text-muted mb-0">{{ t.stats_to }}</label>
+      <input type="date" name="to" value="{{ f.end|date:'Y-m-d' }}"
+             class="form-control form-control-sm bg-transparent border-secondary text-light">
+    </div>
+    <button name="range" value="custom"
+            class="btn btn-sm rounded-pill {% if f.range == 'custom' %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ t.stats_range_custom }}</button>
+  </div>
+  <div class="d-flex flex-wrap gap-3 small">
+    <div class="form-check mb-0">
+      <input class="form-check-input" type="checkbox" name="optional" value="1" id="statsOptional"
+             {% if f.include_optional %}checked{% endif %} onchange="this.form.submit()">
+      <label class="form-check-label" for="statsOptional">{{ t.stats_include_optional }}</label>
+    </div>
+    {% if show_lanes_toggle %}
+    <div class="form-check mb-0">
+      <input class="form-check-input" type="checkbox" name="lanes" value="1" id="statsPerLane"
+             {% if f.per_lane %}checked{% endif %} onchange="this.form.submit()">
+      <label class="form-check-label" for="statsPerLane">{{ t.stats_per_lane }}</label>
+    </div>
+    {% endif %}
+  </div>
+  <div class="text-muted small mt-2">{{ f.start|date:"d.m.Y" }} – {{ f.end|date:"d.m.Y" }}</div>
+</form>

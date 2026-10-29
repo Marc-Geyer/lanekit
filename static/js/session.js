@@ -937,3 +937,21 @@ function initSortable() {
     },
   });
 }
+
+
+/* ── Session settings (lane count, optional flag) ───────────────────────── */
+
+window.saveSessionSettings = function () {
+  const lanesEl = document.getElementById('sessionLanes');
+  const optEl = document.getElementById('sessionOptional');
+  const msg = document.getElementById('sessionSettingsMsg');
+  if (!lanesEl || !optEl) return;
+  const raw = lanesEl.value.trim();
+  fetch(`/training/session/${lanesEl.dataset.instance}/settings/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+    body: JSON.stringify({ lanes: raw === '' ? null : parseInt(raw, 10), is_optional: optEl.checked }),
+  }).then(r => r.json().then(d => ({ ok: r.ok, d }))).then(({ ok, d }) => {
+    if (msg) msg.textContent = ok ? '' : (d.error || '');
+  }).catch(() => { if (msg) msg.textContent = UI_STRINGS.addSwimmerError; });
+};

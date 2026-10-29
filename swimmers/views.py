@@ -71,7 +71,21 @@ def swimmer_detail_view(request, pk):
     else:
         manageable_group_ids = trained_group_ids(request.user)
         available_groups = available_groups.filter(pk__in=manageable_group_ids)
+    # Attendance statistics: profile trainers and admins only (club-level decisions).
+    stats_ctx = {}
+    if request.user.profile.is_trainer:
+        from training import stats
+        f = stats.filter_context(request.GET)
+        stats_ctx = {
+            'f': f,
+            'show_lanes_toggle': False,
+            'stats': stats.person_stats(
+                swimmer, set(Group.objects.values_list('pk', flat=True)),
+                f['start'], f['end'], include_optional=f['include_optional'],
+            ),
+        }
     return render(request, 'swimmers/detail.html', {
+        **stats_ctx,
         'swimmer': swimmer, 'form': form,
         'memberships': memberships, 'can_edit': can_edit,
         'available_groups': available_groups,

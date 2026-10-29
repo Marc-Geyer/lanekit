@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block title %}{{ t.stats_title_group }} – {{ group.name }}{% endblock %}
+
+{% block content %}
+<div class="mb-3 d-flex align-items-center gap-2">
+  <a href="{% url 'group_detail' group.pk %}" class="btn btn-sm btn-outline-secondary rounded-pill">
+    <i class="bi bi-arrow-left me-1"></i>{{ t.btn_back }}
+  </a>
+</div>
+
+<h2 class="fw-bold mb-3" style="font-family:'Syne',sans-serif">
+  <i class="bi bi-bar-chart-line text-primary me-2"></i>{{ t.stats_title_group }}
+  <span class="badge ms-2 fs-6" style="background:{{ group.color }}">{{ group.name }}</span>
+</h2>
+
+<div id="stats">{% include 'training/_stats_filter.html' %}</div>
+
+{% if summary.optional_hidden and not f.include_optional %}
+<p class="text-muted small"><i class="bi bi-eye-slash me-1"></i>{{ summary.optional_hidden }} {{ t.stats_optional_hidden }}</p>
+{% endif %}
+
+<div class="sc-card p-3 mb-4">
+  <div class="row g-2 text-center">
+    <div class="col-6 col-md-3 col-lg"><div class="fs-4 fw-bold">{{ summary.sessions }}</div><div class="small text-muted">{{ t.stats_sessions }}</div></div>
+    <div class="col-6 col-md-3 col-lg"><div class="fs-4 fw-bold">{{ summary.avg_present|default_if_none:"–" }}</div><div class="small text-muted">{{ t.stats_avg_present }}</div></div>
+    <div class="col-6 col-md-3 col-lg"><div class="fs-4 fw-bold">{% if summary.quota is not None %}{{ summary.quota }}%{% else %}–{% endif %}</div><div class="small text-muted">{{ t.stats_quota }}</div></div>
+    <div class="col-6 col-md-3 col-lg"><div class="fs-4 fw-bold">{% if summary.excused_share is not None %}{{ summary.excused_share }}%{% else %}–{% endif %}</div><div class="small text-muted">{{ t.stats_excused_share }}</div></div>
+    {% if f.per_lane %}
+    <div class="col-12 col-lg"><div class="fs-4 fw-bold text-primary">{{ summary.avg_per_lane|default_if_none:"–" }}</div><div class="small text-muted">{{ t.stats_avg_per_lane }}</div></div>
+    {% endif %}
+  </div>
+  {% if f.per_lane and summary.sessions_without_lanes %}
+  <p class="small text-muted mt-2 mb-0"><i class="bi bi-info-circle me-1"></i>{{ summary.sessions_without_lanes }} {{ t.stats_no_lanes_hint }}</p>
+  {% endif %}
+</div>
+
+<div class="sc-card p-0 mb-4">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead><tr>
+        <th>{{ t.trainer_report_col_date }}</th><th>{{ t.trainer_report_col_start }}</th>
+        <th class="text-end">{{ t.status_present }}</th><th class="text-end">{{ t.status_absent }}</th>
+        <th class="text-end">{{ t.status_excused }}</th><th class="text-end">{{ t.status_unknown }}</th>
+        <th class="text-end">{{ t.stats_quota }}</th>
+        {% if f.per_lane %}<th class="text-end">{{ t.stats_col_lanes }}</th><th class="text-end">{{ t.stats_col_per_lane }}</th>{% endif %}
+      </tr></thead>
+      <tbody>
+        {% for r in rows reversed %}
+        <tr>
+          <td class="text-nowrap">{{ r.date|date:"D, d.m.Y" }}{% if r.is_optional %} <span class="badge bg-secondary">{{ t.stats_optional_badge }}</span>{% endif %}</td>
+          <td>{{ r.start|time:"H:i" }}</td>
+          <td class="text-end text-success">{{ r.present }}</td>
+          <td class="text-end text-danger">{{ r.absent }}</td>
+          <td class="text-end text-warning">{{ r.excused }}</td>
+          <td class="text-end text-muted">{{ r.unknown }}</td>
+          <td class="text-end">{% if r.quota is not None %}{{ r.quota }}%{% else %}–{% endif %}</td>
+          {% if f.per_lane %}
+          <td class="text-end">{{ r.lanes|default_if_none:"–" }}</td>
+          <td class="text-end fw-semibold">{{ r.per_lane|default_if_none:"–" }}</td>
+          {% endif %}
+        </tr>
+        {% empty %}
+        <tr><td colspan="9" class="text-center text-muted py-4">{{ t.stats_empty }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if people %}
+<div class="sc-card p-4">
+  <h5 class="fw-bold mb-3"><i class="bi bi-people text-primary me-2"></i>{{ t.stats_ranking_title }}</h5>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead><tr>
+        <th></th><th class="text-end">{{ t.status_present }}</th><th class="text-end">{{ t.status_absent }}</th>
+        <th class="text-end">{{ t.status_excused }}</th><th class="text-end">{{ t.stats_quota }}</th>
+      </tr></thead>
+      <tbody>
+        {% for p in people %}
+        <tr>
+          <td><a href="{% url 'swimmer_detail' p.swimmer.pk %}" class="text-decoration-none text-light">{{ p.swimmer.full_name }}</a></td>
+          <td class="text-end">{{ p.present }}</td><td class="text-end">{{ p.absent }}</td>
+          <td class="text-end">{{ p.excused }}</td><td class="text-end fw-semibold">{{ p.quota }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="small text-muted mt-2 mb-0">{{ t.stats_hint_unknown }}</p>
+</div>
+{% endif %}
+{% endblock %}

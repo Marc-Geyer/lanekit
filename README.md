@@ -14,6 +14,7 @@ A self-hosted Django application for managing swimming groups, training sessions
 - [Production deployment](#production-deployment)
 - [Git on the server](#git-on-the-server)
 - [Running without Docker](#running-without-docker)
+- [Statistics](#statistics)
 - [Key URLs](#key-urls)
 - [Security](#security)
 - [How it works](#how-it-works)
@@ -389,6 +390,37 @@ python manage.py runserver
 
 ---
 
+## Statistics
+
+Attendance statistics help trainers judge absences and spot people who are missing repeatedly over a longer period. Because club-level decisions are based on them, they are only visible to users whose **profile role is Trainer or Administrator** — being trainer of a single group is *not* enough (group trainers keep their normal live-session rights).
+
+**Where to find them**
+
+| View | Location | Content |
+|---|---|---|
+| Person | *People → person detail*, section "Attendance statistics" | Attendance rate, present / absent / excused, share of excused absences, current streak of missed sessions, per-session status list |
+| Group | *Groups → group detail → Statistics* (`/training/group/<id>/stats/`) | Table per session (present / absent / excused / unknown / rate), summary (sessions, Ø present, rate), ranking of members by attendance (lowest first) |
+
+**Filters** (both views) — quick ranges *Last month* (previous calendar month), *Last 30 days*, *Last quarter*, *Current quarter*, or a custom from/to range; the end is capped at today. Optional sessions can be included via a checkbox.
+
+**How the numbers are defined**
+
+- Attendance rate = present ÷ (present + absent + excused). *Unknown* is shown separately and **never counted as a miss**.
+- Excused share = excused ÷ (absent + excused).
+- Trainers of the group are left out of group statistics (same as the trainer report). Only sessions that were actually opened (a `SessionInstance` exists) are counted.
+- **Optional sessions** — a trainer can mark a session as optional in the session modal (e.g. during holidays, when only a few swimmers are expected). Optional sessions are excluded by default so they don't distort the numbers; the page tells you how many were left out.
+
+**Lanes and utilisation per lane**
+
+- `Location.lanes`, `RecurringSession.lanes` and `SessionInstance.lanes` are all optional; a location without lanes (e.g. a gym) stays valid.
+- A recurring slot cannot use more lanes than its location has (checked in the form, admin and session modal). A new slot takes its location's lane count as the default; every new session takes the slot's lane count. A trainer only has to correct a single session when it deviates (lane field in the session modal).
+- Lane counts added **retroactively** are back-filled: sessions without a lane count receive it (slot → its sessions, location → its slots and their sessions). Sessions that were already corrected by hand, and history from before a later change (e.g. 6 → 4 lanes), are left untouched.
+- Switching on **Per lane** in the group view shows present swimmers per lane for each session and as an average. Sessions without a lane count are not part of the per-lane value; the page shows how many were skipped.
+
+**Upgrading** — this adds migration `training/0007_lanes_optional_sessions.py`; run `python manage.py migrate` (production: `$COMPOSE exec app python manage.py migrate`). New texts are available in all four languages.
+
+---
+
 ## Key URLs
 
 | URL | Description |
@@ -398,15 +430,17 @@ python manage.py runserver
 | `/training/session/<id>/<date>/` | Session modal content – GET=view, POST=create instance (trainer) |
 | `/training/session/<id>/state/` | Polling fallback – current attendance + plan state (used when the WebSocket drops) |
 | `/training/session/<id>/attendance/` | REST attendance update – polling fallback for WebSocket writes |
+| `/training/session/<id>/settings/` | Trainer: set a session's lane count and "optional" flag (POST, JSON) |
 | `/training/session/<id>/add-swimmer/` | Trainer: add a swimmer to the live session |
 | `/training/session/<id>/plan-entry/photo-create/` | Trainer: create a plan entry directly from a photo |
 | `/training/plan-entry/<id>/photo/` | Trainer: upload/remove the photo of a plan entry |
 | `/training/recurring/new/<group_id>/`, `/training/recurring/<id>/edit/` | Trainer: create/edit a recurring session |
 | `/training/exception/new/` | Trainer: create a session exception (cancellation) |
 | `/training/trainer/report/` | Trainer: quarterly attendance report |
+| `/training/group/<id>/stats/` | Trainer/Admin (profile role): group attendance statistics |
 | `/ws/session/<instance_id>/` | WebSocket endpoint (live attendance + training plan) |
 | `/groups/` | Group list |
-| `/swimmers/` | People search |
+| `/swimmers/` | People search (person detail incl. attendance statistics for profile trainers/admins) |
 | `/accounts/login/` | Login (rate-limited) |
 | `/accounts/register/` | Self-registration – only for people already known as a `Swimmer` by e-mail (rate-limited) |
 | `/accounts/activate/<uidb64>/<token>/` | Account activation link (from the registration e-mail) |
@@ -447,6 +481,8 @@ If you find a vulnerability, please report it privately to the maintainer rather
 **Session Modal** — Clicking a calendar event loads the modal via an AJAX GET. If no instance exists yet, trainers see a "Start Session" button that POSTs to create the instance and pre-populate an attendance row for each group member.
 
 **WebSocket Live Sync** — `SessionConsumer` verifies the connecting user is a trainer of that group, then joins a per-session channel group. Every action (attendance toggle, plan entry CRUD, drag-reorder, notes autosave) is saved to the database and broadcast to every connected client. The coloured dot in the modal corner shows the connection state.
+
+**Statistics** — `training/stats.py` aggregates `Attendance` rows per person or per group with a handful of queries, restricted to profile trainers/admins (see [Statistics](#statistics)). Optional sessions are filtered out unless requested; lane counts are materialised on each `SessionInstance`, so per-lane figures stay correct even if a slot's lane count changes later.
 
 **Excuse Tokens** — A trainer generates a shareable one-time URL via `POST /training/excuse/generate/`. The swimmer visits the link, confirms, and their attendance is automatically set to "excused" — no login required.
 

@@ -50,5 +50,5 @@ class AttendanceAdmin(admin.ModelAdmin):
 
 @admin.register(Location)
 class LocationAdmin(admin.ModelAdmin):
-    list_display = ('name', 'type', 'city', 'postal_code', 'street_address')
+    list_display = ('name', 'type', 'lanes', 'city', 'postal_code', 'street_address')
     list_filter = ('type',)

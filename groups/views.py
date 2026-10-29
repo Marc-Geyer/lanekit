@@ -31,6 +31,7 @@ def group_detail_view(request, pk):
     return render(request, 'groups/detail.html', {
         'group': group, 'memberships': memberships, 'sessions': sessions,
         'is_trainer': is_trainer,
+        'can_view_stats': request.user.profile.is_trainer,
         'group_form': GroupForm(instance=group) if is_trainer else None,
     })
 

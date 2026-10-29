@@ -1,4 +1,6 @@
 import uuid
+from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.contrib.auth.models import User
 from groups.models import Group
@@ -9,6 +11,15 @@ WEEKDAYS = [
     (0, 'Montag'), (1, 'Dienstag'), (2, 'Mittwoch'),
     (3, 'Donnerstag'), (4, 'Freitag'), (5, 'Samstag'), (6, 'Sonntag'),
 ]
+
+def _check_lanes_fit(lanes, location):
+    """Raise if `lanes` exceeds the lane count of `location` (both optional)."""
+    if lanes and location is not None and location.lanes and lanes > location.lanes:
+        raise ValidationError({
+            'lanes': f'{location.name} has only {location.lanes} lanes '
+                     f'(requested: {lanes}).'
+        })
+
 
 class Location(models.Model):
     TYPE_50M = '50m_Pool'
@@ -27,12 +38,33 @@ class Location(models.Model):
     city = models.CharField(max_length=200)
     postal_code = models.CharField(max_length=5, blank=True)
     street_address = models.TextField()
+    lanes = models.PositiveSmallIntegerField(
+        null=True, blank=True, validators=[MinValueValidator(1)],
+        help_text='Number of lanes available. Leave empty for non-pool locations.'
+    )
 
     class Meta:
         ordering = ['name']
 
     def __str__(self):
         return self.name
+
+    def clean(self):
+        if self.pk and self.lanes and self.recurring_sessions.filter(lanes__gt=self.lanes).exists():
+            raise ValidationError({
+                'lanes': 'Recurring sessions at this location already use more lanes.'
+            })
+
+    def save(self, *args, **kwargs):
+        previous = None
+        if self.pk:
+            previous = type(self).objects.filter(pk=self.pk).values_list('lanes', flat=True).first()
+        super().save(*args, **kwargs)
+        # Lane count added retroactively: sessions that never specified one inherit it.
+        if self.lanes is not None and previous is None:
+            for rec in self.recurring_sessions.filter(lanes__isnull=True):
+                rec.lanes = self.lanes
+                rec.save()   # RecurringSession.save() backfills its instances
 
     def address(self):
         return f"{self.street_address}, {self.postal_code} {self.city}"
@@ -48,10 +80,30 @@ class RecurringSession(models.Model):
     valid_until = models.DateField(null=True, blank=True)
     active = models.BooleanField(default=True)
     notes = models.TextField(blank=True)
+    lanes = models.PositiveSmallIntegerField(
+        null=True, blank=True, validators=[MinValueValidator(1)],
+        help_text='Lanes used by this slot. Copied to every new session; '
+                  'individual sessions can be corrected afterwards.'
+    )
     created_by = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name='+')
 
     class Meta:
         ordering = ['day_of_week', 'start_time']
+
+    def clean(self):
+        _check_lanes_fit(self.lanes, self.location)
+
+    def save(self, *args, **kwargs):
+        previous = None
+        if self.pk:
+            previous = type(self).objects.filter(pk=self.pk).values_list('lanes', flat=True).first()
+        elif self.lanes is None and self.location is not None:
+            self.lanes = self.location.lanes          # new slot: default from the location
+        super().save(*args, **kwargs)
+        # Lane count added retroactively: existing sessions without one inherit it.
+        # A later change (e.g. 6 -> 4) deliberately leaves past sessions untouched.
+        if self.lanes is not None and previous is None:
+            self.instances.filter(lanes__isnull=True).update(lanes=self.lanes)
 
     def __str__(self):
         return f'{self.group} – {self.get_day_of_week_display()} {self.start_time:%H:%M}'
@@ -128,12 +180,29 @@ class SessionInstance(models.Model):
     )
     date = models.DateField()
     trainer_notes = models.TextField(blank=True, help_text='General notes for this session.')
+    lanes = models.PositiveSmallIntegerField(
+        null=True, blank=True, validators=[MinValueValidator(1)],
+        help_text='Lanes actually used. Defaults to the recurring slot at creation; '
+                  'only set manually to correct it.'
+    )
+    is_optional = models.BooleanField(
+        default=False,
+        help_text='Optional session (few swimmers expected); excluded from statistics by default.'
+    )
     created_by = models.ForeignKey(User, null=True, on_delete=models.SET_NULL, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         unique_together = ('recurring_session', 'date')
         ordering = ['-date']
+
+    def clean(self):
+        _check_lanes_fit(self.lanes, self.recurring_session.location)
+
+    def save(self, *args, **kwargs):
+        if self._state.adding and self.lanes is None:
+            self.lanes = self.recurring_session.lanes
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f'{self.recurring_session} on {self.date}'

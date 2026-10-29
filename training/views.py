@@ -15,6 +15,7 @@ from .models import (
 )
 from groups.models import Group, GroupMembership
 from swimmers.models import Swimmer
+from . import stats
 
 
 def _is_session_trainer(request, recurring_session):
@@ -273,6 +274,40 @@ def session_modal_view(request, session_id, session_date):
         'instance_id': instance.pk if instance else None,
         'is_trainer': is_trainer,
     })
+
+
+# ── Session settings (lanes, optional flag) ──────────────────────────────────
+
+@login_required
+def session_settings_api(request, instance_id):
+    """Trainer correction of a session's lane count and its "optional" flag."""
+    from django.core.exceptions import ValidationError
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+
+    instance = get_object_or_404(
+        SessionInstance.objects.select_related('recurring_session__location'), pk=instance_id
+    )
+    if not _is_session_trainer(request, instance.recurring_session):
+        return JsonResponse({'error': 'forbidden'}, status=403)
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse({'error': 'invalid json'}, status=400)
+
+    if 'is_optional' in data:
+        instance.is_optional = bool(data['is_optional'])
+    if 'lanes' in data:
+        lanes = data['lanes']
+        if lanes is not None and (isinstance(lanes, bool) or not isinstance(lanes, int) or lanes < 1):
+            return JsonResponse({'error': tr(request, 'msg_lanes_invalid')}, status=400)
+        instance.lanes = lanes
+    try:
+        instance.clean()
+    except ValidationError as exc:
+        return JsonResponse({'error': ' '.join(exc.messages)}, status=400)
+    instance.save(update_fields=['lanes', 'is_optional'])
+    return JsonResponse({'lanes': instance.lanes, 'is_optional': instance.is_optional})
 
 
 # ── Session state polling / offline fallback ─────────────────────────────────
@@ -751,4 +786,25 @@ def trainer_report_view(request):
         'end': end,
         'prev': {'year': prev_year, 'q': prev_q},
         'next': {'year': next_year, 'q': next_q},
+    })
+
+
+# ── Group statistics ─────────────────────────────────────────────────────────
+
+@login_required
+def group_stats_view(request, group_pk):
+    """Per-session attendance table and per-person ranking for one group."""
+    group = get_object_or_404(Group, pk=group_pk)
+    # Statistics inform club-level decisions: profile trainers and admins only.
+    if not request.user.profile.is_trainer:
+        messages.error(request, tr(request, 'msg_no_permission'))
+        return redirect('group_detail', pk=group.pk)
+
+    f = stats.filter_context(request.GET)
+    result = stats.group_stats(
+        group, f['start'], f['end'],
+        include_optional=f['include_optional'], per_lane=f['per_lane'],
+    )
+    return render(request, 'training/group_stats.html', {
+        'group': group, 'f': f, 'show_lanes_toggle': True, **result,
     })

@@ -7,7 +7,7 @@ from .models import RecurringSession, SessionException, TrainingPlanEntry
 class RecurringSessionForm(forms.ModelForm):
     class Meta:
         model = RecurringSession
-        fields = ('day_of_week', 'start_time', 'end_time', 'location',
+        fields = ('day_of_week', 'start_time', 'end_time', 'location', 'lanes',
                   'valid_from', 'valid_until', 'notes', 'active')
         widgets = {
             'start_time': forms.TimeInput(attrs={'type': 'time'}),
@@ -21,7 +21,7 @@ class RecurringSessionForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.helper = FormHelper()
         self.helper.layout = Layout(
-            Row(Column('day_of_week'), Column('location')),
+            Row(Column('day_of_week'), Column('location'), Column('lanes')),
             Row(Column('start_time'), Column('end_time')),
             Row(Column('valid_from'), Column('valid_until')),
             Field('notes'),
