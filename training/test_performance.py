@@ -116,6 +116,18 @@ class SessionResultsApiTests(ResultBase):
         self.client.force_login(self.other_u)
         self.assertNotIn('resultsBody', self.client.get(modal).json()['html'])
 
+    def test_trainers_are_not_timed(self):
+        Attendance.objects.create(session=self.inst, swimmer=self.coach, status='present')
+        r = self.post({'stroke': 'free', 'distance': 50, 'entries': [
+            {'swimmer_id': self.mia.pk, 'time': '30,00'}, {'swimmer_id': self.coach.pk, 'time': '25,00'}]})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()['errors'], {str(self.coach.pk): 'unknown_swimmer'})
+        self.assertEqual(PerformanceResult.objects.count(), 0)
+        # the modal hands the trainer ids to the entry table, which leaves them out
+        modal = reverse('session_modal', args=[self.rs.pk, '2026-10-26'])
+        html = self.client.get(modal).json()['html']
+        self.assertIn(f'data-trainer-ids="{self.coach.pk}"', html)
+
 
 class ResultEditTests(ResultBase):
     def setUp(self):

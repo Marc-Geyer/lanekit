@@ -17,13 +17,22 @@ function showResMsg(text, cls) {
   el.textContent = text || '';
 }
 
+/* Trainers of the session's group: present in the attendance table, but not timed.
+   The ids come from the server because rows added live (WebSocket / polling) carry no role. */
+function _resTrainerIds() {
+  const el = document.getElementById('resultsBody');
+  return new Set(((el && el.dataset.trainerIds) || '').split(',').filter(Boolean));
+}
+
 /* Swimmers currently marked "present" in the attendance table (live DOM, so
-   WebSocket updates are respected). */
+   WebSocket updates are respected) – trainers excluded. */
 function presentSwimmersFromDom() {
   const people = [];
+  const trainers = _resTrainerIds();
   document.querySelectorAll('#attendanceTableBody tr[id^="att-row-"]').forEach(tr => {
     const active = tr.querySelector('.status-btn.active');
     if (!active || active.dataset.status !== 'present') return;
+    if (trainers.has(tr.id.replace('att-row-', ''))) return;     // ← NEU
     const nameEl = tr.querySelector('.fw-medium');
     people.push({ id: tr.id.replace('att-row-', ''), name: nameEl ? nameEl.textContent.trim() : '' });
   });

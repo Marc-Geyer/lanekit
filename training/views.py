@@ -273,6 +273,7 @@ def session_modal_view(request, session_id, session_date):
         'created': created,
         'picker_options': _swimmer_picker_options() if (instance and is_trainer) else [],
         'results_html': _session_results_html(request, instance) if (instance and is_trainer) else '',
+        'result_trainer_ids': _group_trainer_ids(recurring.group) if (instance and is_trainer) else [],
     }, request=request)
 
     return JsonResponse({
@@ -853,6 +854,15 @@ def _broadcast_results_changed(session_id):
         logger.warning('results broadcast failed for session %s', session_id, exc_info=True)
 
 
+def _group_trainer_ids(group):
+    """Swimmer ids of the group's active trainers – they take part in training but are not timed."""
+    return list(
+        GroupMembership.objects
+        .filter(group=group, role=GroupMembership.ROLE_TRAINER, active=True)
+        .values_list('swimmer_id', flat=True)
+    )
+
+
 def _stroke_label(request, stroke):
     return tr(request, f'stroke_{stroke}')
 
@@ -918,7 +928,12 @@ def session_results_api(request, instance_id):
     if not isinstance(entries, list) or not entries or len(entries) > 300:
         return JsonResponse({'error': tr(request, 'msg_result_no_entries')}, status=400)
 
-    session_swimmers = set(instance.attendances.values_list('swimmer_id', flat=True))
+    # Only the group's swimmers are timed – trainers are excluded here as in the UI.
+    session_swimmers = set(
+        instance.attendances
+        .exclude(swimmer_id__in=_group_trainer_ids(instance.recurring_session.group))
+        .values_list('swimmer_id', flat=True)
+    )
     errors, parsed = {}, []
     for e in entries:
         sid = e.get('swimmer_id') if isinstance(e, dict) else None
