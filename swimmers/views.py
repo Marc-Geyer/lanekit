@@ -9,25 +9,66 @@ from .permissions import can_edit_swimmer, can_manage_group_membership, trained_
 
 @login_required
 def swimmer_list_view(request):
-    q = request.GET.get('q', '').split(' ')
-    group_id = request.GET.get('group', '')
-    active_only = request.GET.get('active', '1') == '1'
+    from django.db.models import Exists, OuterRef
+    from groups.models import Group, GroupMembership
+
+    params = request.GET
+    q = params.get('q', '').strip()
+    group_id = params.get('group', '')           # '' = all, 'none' = without group, else pk
+    # status: active (default) | inactive | all. A plain "active" checkbox cannot express
+    # "show inactive", because an unchecked box sends nothing and falls back to the default.
+    status = params.get('status', 'active')
+    if status not in ('active', 'inactive', 'all'):
+        status = 'active'
+    role = params.get('role', '')                # '' | trainer | swimmer
+    if role not in (GroupMembership.ROLE_TRAINER, GroupMembership.ROLE_SWIMMER):
+        role = ''
+    account = params.get('account', '')          # '' | with | without
+    if account not in ('with', 'without'):
+        account = ''
+    sort = params.get('sort', 'name')
+    if sort not in ('name', 'first', 'newest', 'age'):
+        sort = 'name'
+    born_from = _to_year(params.get('born_from'))
+    born_to = _to_year(params.get('born_to'))
+
+    is_trainer_view = request.user.profile.is_trainer
     swimmers = Swimmer.objects.all()
 
-    if active_only:
+    if status == 'active':
         swimmers = swimmers.filter(active=True)
-    if q:
-        for a in q:
-            swimmers = swimmers.filter(
-                Q(first_name__icontains=a) | Q(last_name__icontains=a) |
-                Q(email__icontains=a) | Q(phone__icontains=a) |
-                Q(groupmembership_set__group__name=a)
-            )
-    if group_id:
-        swimmers = swimmers.filter(groupmembership_set__group_id=group_id)
-    if not request.user.profile.is_trainer:
+    elif status == 'inactive':
+        swimmers = swimmers.filter(active=False)
+
+    # Free text: every word must match somewhere (name, e-mail, phone, group name).
+    for word in q.split():
+        swimmers = swimmers.filter(
+            Q(first_name__icontains=word) | Q(last_name__icontains=word) |
+            Q(email__icontains=word) | Q(phone__icontains=word) |
+            Q(groupmembership_set__group__name__icontains=word)
+        )
+
+    memberships = GroupMembership.objects.filter(swimmer_id=OuterRef('pk'), active=True)
+    if group_id == 'none':
+        swimmers = swimmers.filter(~Exists(memberships))
+    elif group_id.isdigit():
+        memberships = memberships.filter(group_id=int(group_id))
+        if role:
+            memberships = memberships.filter(role=role)
+        swimmers = swimmers.filter(Exists(memberships))
+    elif role:
+        swimmers = swimmers.filter(Exists(memberships.filter(role=role)))
+
+    if born_from:
+        swimmers = swimmers.filter(date_of_birth__year__gte=born_from)
+    if born_to:
+        swimmers = swimmers.filter(date_of_birth__year__lte=born_to)
+
+    if is_trainer_view and account:
+        swimmers = swimmers.filter(user__isnull=(account == 'without'))
+
+    if not is_trainer_view:
         # Plain users see all trainers, plus every member of the groups they train themselves.
-        from groups.models import GroupMembership
         visible = Q(is_trainer=True)
         group_ids = trained_group_ids(request.user)
         if group_ids:
@@ -36,19 +77,44 @@ def swimmer_list_view(request):
             ).values('swimmer_id'))
         swimmers = swimmers.filter(visible)
 
-    from groups.models import Group
-    groups = Group.objects.filter(active=True).order_by('name')
+    from django.db.models import F
+    order = {
+        'name': ('last_name', 'first_name'),
+        'first': ('first_name', 'last_name'),
+        'newest': ('-created_at', 'last_name'),
+        # youngest first, persons without a birthday last
+        'age': (F('date_of_birth').desc(nulls_last=True), 'last_name'),
+    }[sort]
+    swimmers = swimmers.distinct().order_by(*order)
 
-    swimmers = swimmers.distinct()
+    groups = Group.objects.filter(active=True).order_by('name')
+    # Everything beyond search/group/status lives in a collapsible panel – open it when used.
+    extra_active = bool(role or account or born_from or born_to or sort != 'name')
 
     context = {
         'swimmers': swimmers,
-        'q': ' '.join(q),
+        'q': q,
         'groups': groups,
         'selected_group': group_id,
-        'active_only': active_only,
+        'status': status,
+        'role': role,
+        'account': account,
+        'sort': sort,
+        'born_from': born_from or '',
+        'born_to': born_to or '',
+        'extra_active': extra_active,
+        'filters_active': bool(q or group_id or status != 'active' or extra_active),
     }
     return render(request, 'swimmers/list.html', context)
+
+
+def _to_year(value):
+    """Birth-year filter input: a plausible 4-digit year or None."""
+    try:
+        year = int(value)
+    except (TypeError, ValueError):
+        return None
+    return year if 1900 <= year <= 2100 else None
 
 
 @login_required

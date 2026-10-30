@@ -227,10 +227,51 @@ function initResultsPanel() {
     const el = document.getElementById(id);
     if (el) { el.addEventListener('change', markRecordedInEntryTable); el.addEventListener('input', markRecordedInEntryTable); }
   });
+  initResultReorder();
+}
+
+/* Drag-reorder of the entry rows via pointer events (mouse, touch, pen).
+   Deliberately not SortableJS: the table lives in a Bootstrap modal next to the plan list
+   (which already owns a Sortable instance), and native HTML5 drag-and-drop is unreliable
+   there (long-press only on Android, no drag on some iOS versions). The handle has
+   touch-action:none, so the page does not scroll while dragging. Rows are moved live. */
+function initResultReorder() {
   const tbody = document.getElementById('resEntryBody');
-  if (tbody && typeof Sortable !== 'undefined') {
-    tbody.dataset.sortableReady = '1';
-    Sortable.create(tbody, { handle: '.res-handle', animation: 150, onEnd: _saveResOrder });
-  }
+  if (!tbody || tbody.dataset.reorderReady) return;
+  tbody.dataset.reorderReady = '1';
+  let row = null, pointerId = null;
+
+  tbody.addEventListener('pointerdown', e => {
+    const handle = e.target.closest('.res-handle');
+    if (!handle || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    row = handle.closest('tr');
+    pointerId = e.pointerId;
+    row.classList.add('res-dragging');
+    try { tbody.setPointerCapture(pointerId); } catch (err) { /* ignore */ }
+    e.preventDefault();
+  });
+
+  tbody.addEventListener('pointermove', e => {
+    if (!row || e.pointerId !== pointerId) return;
+    const others = Array.from(tbody.querySelectorAll('tr'))
+      .filter(tr => tr !== row && tr.querySelector('input[data-swimmer]'));
+    const next = others.find(tr => {
+      const r = tr.getBoundingClientRect();
+      return e.clientY < r.top + r.height / 2;
+    });
+    if (next) { if (row.nextElementSibling !== next) tbody.insertBefore(row, next); }
+    else if (tbody.lastElementChild !== row) tbody.appendChild(row);
+    e.preventDefault();
+  });
+
+  const finish = e => {
+    if (!row || (e && e.pointerId !== pointerId)) return;
+    row.classList.remove('res-dragging');
+    try { tbody.releasePointerCapture(pointerId); } catch (err) { /* ignore */ }
+    row = null; pointerId = null;
+    _saveResOrder();
+  };
+  tbody.addEventListener('pointerup', finish);
+  tbody.addEventListener('pointercancel', finish);
 }
 window.initResultsPanel = initResultsPanel;

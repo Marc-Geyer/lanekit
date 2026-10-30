@@ -1,8 +1,6 @@
 from pathlib import Path
 import os
 
-from django.conf.locale.az.formats import DATE_INPUT_FORMATS
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-change-me-in-production')
@@ -139,7 +137,9 @@ CRISPY_TEMPLATE_PACK = 'bootstrap5'
 DATE_INPUT_FORMATS = [
     '%d.%m.%Y',
     '%d.%m.%y',
+    '%Y-%m-%d',
 ]
+TIME_INPUT_FORMATS = ['%H:%M', '%H:%M:%S']
 
 
 # Required when running behind an HTTPS reverse proxy

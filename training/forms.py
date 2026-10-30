@@ -1,6 +1,7 @@
 from django import forms
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Submit, Row, Column, Field
+from swimmingclub.widgets import EuDateInput, EuTimeInput
 from .models import RecurringSession, SessionException, TrainingPlanEntry
 
 
@@ -10,10 +11,10 @@ class RecurringSessionForm(forms.ModelForm):
         fields = ('day_of_week', 'start_time', 'end_time', 'location', 'lanes',
                   'valid_from', 'valid_until', 'notes', 'active')
         widgets = {
-            'start_time': forms.TimeInput(attrs={'type': 'time'}),
-            'end_time': forms.TimeInput(attrs={'type': 'time'}),
-            'valid_from': forms.DateInput(attrs={'type': 'date'}),
-            'valid_until': forms.DateInput(attrs={'type': 'date'}),
+            'start_time': EuTimeInput(),
+            'end_time': EuTimeInput(),
+            'valid_from': EuDateInput(),
+            'valid_until': EuDateInput(),
             'notes': forms.Textarea(attrs={'rows': 2}),
         }
 
@@ -35,8 +36,8 @@ class SessionExceptionForm(forms.ModelForm):
         model = SessionException
         fields = ('date', 'end_date', 'reason', 'affects_all', 'affected_sessions')
         widgets = {
-            'date': forms.DateInput(attrs={'type': 'date'}),
-            'end_date': forms.DateInput(attrs={'type': 'date'}),
+            'date': EuDateInput(),
+            'end_date': EuDateInput(),
             'affected_sessions': forms.CheckboxSelectMultiple(),
         }
 

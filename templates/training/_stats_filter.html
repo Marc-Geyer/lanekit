@@ -15,12 +15,12 @@
   <div class="d-flex flex-wrap align-items-end gap-2 mb-2">
     <div>
       <label class="form-label small text-muted mb-0">{{ t.stats_from }}</label>
-      <input type="date" name="from" value="{{ f.start|date:'Y-m-d' }}"
+      <input type="text" data-datepicker="iso" name="from" value="{{ f.start|date:'Y-m-d' }}"
              class="form-control form-control-sm bg-transparent border-secondary text-light">
     </div>
     <div>
       <label class="form-label small text-muted mb-0">{{ t.stats_to }}</label>
-      <input type="date" name="to" value="{{ f.end|date:'Y-m-d' }}"
+      <input type="text" data-datepicker="iso" name="to" value="{{ f.end|date:'Y-m-d' }}"
              class="form-control form-control-sm bg-transparent border-secondary text-light">
     </div>
     <button name="range" value="custom"

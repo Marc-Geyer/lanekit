@@ -369,3 +369,8 @@ body {
 @media (max-width: 768px) {
   .fc .fc-toolbar { flex-direction: column; gap: .5rem; }
 }
+
+/* Swim-time entry: row being dragged */
+#resEntryBody tr.res-dragging { background: rgba(13, 110, 253, .18); }
+#resEntryBody .res-handle { user-select: none; -webkit-user-select: none; }
+.flatpickr-calendar { font-family: inherit; }

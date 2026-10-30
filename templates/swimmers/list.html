@@ -15,28 +15,77 @@
 
 <div class="sc-card p-3 mb-4">
   <form method="get" class="row g-2 align-items-end">
-    <div class="col-md-5">
+    <div class="col-md-4">
       <input type="search" name="q" value="{{ q }}"
              class="form-control bg-transparent border-secondary text-light"
              placeholder="{{ t.search_ph }}">
     </div>
-    <div class="col-md-3">
-      <select name="group" class="form-select bg-transparent border-secondary text-light">
+    <div class="col-6 col-md-3">
+      <select name="group" class="form-select bg-transparent border-secondary text-light" aria-label="{{ t.all_groups }}">
         <option value="">{{ t.all_groups }}</option>
+        <option value="none" {% if selected_group == 'none' %}selected{% endif %}>{{ t.people_group_none }}</option>
         {% for g in groups %}
         <option value="{{ g.pk }}" {% if selected_group == g.pk|stringformat:"i" %}selected{% endif %}>{{ g.name }}</option>
         {% endfor %}
       </select>
     </div>
-    <div class="col-md-2">
-      <div class="form-check form-switch mt-2">
-        <input class="form-check-input" type="checkbox" name="active" value="1"
-               id="activeOnly" {% if active_only %}checked{% endif %}>
-        <label class="form-check-label small" for="activeOnly">{{ t.active_only }}</label>
-      </div>
+    <div class="col-6 col-md-2">
+      <select name="status" class="form-select bg-transparent border-secondary text-light" aria-label="{{ t.people_status }}">
+        <option value="active" {% if status == 'active' %}selected{% endif %}>{{ t.people_status_active }}</option>
+        <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>{{ t.people_status_inactive }}</option>
+        <option value="all" {% if status == 'all' %}selected{% endif %}>{{ t.people_status_all }}</option>
+      </select>
     </div>
-    <div class="col-md-2">
-      <button class="btn btn-primary w-100">{{ t.btn_filter }}</button>
+    <div class="col-12 col-md-3 d-flex gap-2">
+      <button class="btn btn-primary flex-grow-1">{{ t.btn_filter }}</button>
+      {% if filters_active %}
+      <a href="{% url 'swimmer_list' %}" class="btn btn-outline-secondary" title="{{ t.people_reset }}" aria-label="{{ t.people_reset }}"><i class="bi bi-x-lg"></i></a>
+      {% endif %}
+    </div>
+
+    <div class="col-12">
+      <a class="small text-decoration-none" data-bs-toggle="collapse" href="#moreFilters" role="button"
+         aria-expanded="{% if extra_active %}true{% else %}false{% endif %}" aria-controls="moreFilters">
+        <i class="bi bi-sliders me-1"></i>{{ t.people_more_filters }}{% if extra_active %} <span class="badge bg-primary rounded-pill">•</span>{% endif %}
+      </a>
+    </div>
+    <div class="collapse {% if extra_active %}show{% endif %} col-12" id="moreFilters">
+      <div class="row g-2 pt-1">
+        <div class="col-6 col-md-3">
+          <select name="role" class="form-select form-select-sm bg-transparent border-secondary text-light" aria-label="{{ t.people_role_any }}">
+            <option value="">{{ t.people_role_any }}</option>
+            <option value="trainer" {% if role == 'trainer' %}selected{% endif %}>{{ t.role_trainer }}</option>
+            <option value="swimmer" {% if role == 'swimmer' %}selected{% endif %}>{{ t.role_swimmer }}</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <input type="number" name="born_from" value="{{ born_from }}" min="1900" max="2100" inputmode="numeric"
+                 placeholder="{{ t.people_born_from }}" aria-label="{{ t.people_born_from }}"
+                 class="form-control form-control-sm bg-transparent border-secondary text-light">
+        </div>
+        <div class="col-6 col-md-3">
+          <input type="number" name="born_to" value="{{ born_to }}" min="1900" max="2100" inputmode="numeric"
+                 placeholder="{{ t.people_born_to }}" aria-label="{{ t.people_born_to }}"
+                 class="form-control form-control-sm bg-transparent border-secondary text-light">
+        </div>
+        {% if user.profile.is_trainer %}
+        <div class="col-6 col-md-3">
+          <select name="account" class="form-select form-select-sm bg-transparent border-secondary text-light" aria-label="{{ t.people_account_any }}">
+            <option value="">{{ t.people_account_any }}</option>
+            <option value="with" {% if account == 'with' %}selected{% endif %}>{{ t.people_account_with }}</option>
+            <option value="without" {% if account == 'without' %}selected{% endif %}>{{ t.people_account_without }}</option>
+          </select>
+        </div>
+        {% endif %}
+        <div class="col-12 col-md-4">
+          <select name="sort" class="form-select form-select-sm bg-transparent border-secondary text-light" aria-label="{{ t.people_sort }}">
+            <option value="name" {% if sort == 'name' %}selected{% endif %}>{{ t.people_sort }}: {{ t.people_sort_name }}</option>
+            <option value="first" {% if sort == 'first' %}selected{% endif %}>{{ t.people_sort }}: {{ t.people_sort_first }}</option>
+            <option value="newest" {% if sort == 'newest' %}selected{% endif %}>{{ t.people_sort }}: {{ t.people_sort_newest }}</option>
+            <option value="age" {% if sort == 'age' %}selected{% endif %}>{{ t.people_sort }}: {{ t.people_sort_age }}</option>
+          </select>
+        </div>
+      </div>
     </div>
   </form>
 </div>

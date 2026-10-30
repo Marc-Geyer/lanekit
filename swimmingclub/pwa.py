@@ -12,7 +12,7 @@ from django.templatetags.static import static
 from django.views.decorators.cache import never_cache
 
 # Bump to force clients to drop old caches.
-SW_VERSION = 'v1'
+SW_VERSION = 'v2'
 
 
 @never_cache
