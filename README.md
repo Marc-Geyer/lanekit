@@ -15,6 +15,7 @@ A self-hosted Django application for managing swimming groups, training sessions
 - [Git on the server](#git-on-the-server)
 - [Running without Docker](#running-without-docker)
 - [Statistics](#statistics)
+- [Performance results](#performance-results)
 - [Key URLs](#key-urls)
 - [Security](#security)
 - [How it works](#how-it-works)
@@ -421,6 +422,28 @@ Attendance statistics help trainers judge absences and spot people who are missi
 
 ---
 
+## Performance results
+
+Trainers can record swim times during a session; the development per swimmer is shown as a chart.
+
+**Recording (trainer of the group, session modal)** — open a session that has been started, expand **Record times**, choose the stroke (freestyle, backstroke, breaststroke, butterfly, medley) and the distance, and enter a time for every swimmer in the table. The table lists everyone currently marked *present* (use *Load present swimmers* after changing attendance); empty rows are skipped and **Enter** jumps to the next swimmer. Starts usually follow performance rather than the name list, so rows can be **dragged by their handle** into start order (*A–Z* resets it); the order is remembered on that device only, so two trainers can time different heats. A check mark with the time next to a swimmer shows that a time for the selected stroke/distance already exists — e.g. entered by the other trainer — so nobody enters it twice. Day and location are taken from the session, the pool length (25 / 50 m) from the location type. All times recorded this way are marked **unofficial**. Recorded times are listed next to the form and can be corrected or deleted there.
+
+**Live sync** — saving, correcting or deleting a time notifies every device connected to the session over the WebSocket (`results_changed`), which then re-fetches the list; so parallel entry by several trainers shows up everywhere within moments, like attendance. The message is sent by the server after the save, never relayed from a client. In polling-fallback mode the list is refreshed together with the 5-second state poll, and after every reconnect.
+
+Accepted time formats: `32,45`, `32.45`, `1:05,32`, `65,32`; a single decimal digit means tenths (`32,1` = 32.10 s). If any time in a submission is invalid nothing is saved and the offending fields are highlighted.
+
+**Chart (person detail → "Performance development")** — one line per combination of stroke, distance and pool length. Filter by stroke, distance, pool length, date range and official / unofficial; *Evaluate pool lengths separately* (default on) can be switched off to merge 25 m and 50 m times into one line per discipline (a warning reminds that these are not directly comparable); click a legend entry to hide or show a single line. The Y axis can show the time or the time per 100 m, so different distances become comparable. Below the chart, a table lists the filtered times and marks the personal best (per line, within the current filter). Triangles mark official times, circles unofficial ones.
+
+**Group overview** — *Groups → group detail → Statistics* has two tabs: *Attendance* (as before) and *Swim times* (`/training/group/<id>/stats/?tab=times`). The times tab uses the same period filter and adds filters for stroke, distance and pool length (separate by default, or merged). For every discipline it ranks the group's active swimmers by best time and shows the latest time, number of times and the development (latest vs. first time in the period, green = faster). Trainers of the group are left out. Like all statistics it is visible to profile trainers and admins only.
+
+**Who sees what** — recording and correcting: trainers of the session's group (and admins). Chart: everyone who may edit the person — profile trainers/admins, trainers of the person's groups and the person themself. Other members do not see anyone's times.
+
+**Data model** — `training.PerformanceResult`: swimmer, optional session, date, optional location, stroke, distance (m), time in hundredths of a second, pool length (25 / 50, derived from the location when empty), `is_official` (always `False` for training times — reserved so competition results can be added later without a schema change), notes, recorded by. Times of different pool lengths are kept in separate lines because they are not directly comparable.
+
+**Upgrading** — this adds migration `training/0008_performance_result.py`; run `python manage.py migrate` (production: `$COMPOSE exec app python manage.py migrate`). The chart uses Chart.js 4.4.7 from jsDelivr, like the other front-end libraries. New texts are available in all four languages.
+
+---
+
 ## Key URLs
 
 | URL | Description |
@@ -432,12 +455,14 @@ Attendance statistics help trainers judge absences and spot people who are missi
 | `/training/session/<id>/attendance/` | REST attendance update – polling fallback for WebSocket writes |
 | `/training/session/<id>/settings/` | Trainer: set a session's lane count and "optional" flag (POST, JSON) |
 | `/training/session/<id>/add-swimmer/` | Trainer: add a swimmer to the live session |
+| `/training/session/<id>/results/` | Trainer: GET list / POST record swim times (stroke, distance, one time per swimmer; JSON) |
+| `/training/result/<id>/update/`, `/training/result/<id>/delete/` | Trainer: correct / delete a recorded time (POST, JSON) |
 | `/training/session/<id>/plan-entry/photo-create/` | Trainer: create a plan entry directly from a photo |
 | `/training/plan-entry/<id>/photo/` | Trainer: upload/remove the photo of a plan entry |
 | `/training/recurring/new/<group_id>/`, `/training/recurring/<id>/edit/` | Trainer: create/edit a recurring session |
 | `/training/exception/new/` | Trainer: create a session exception (cancellation) |
 | `/training/trainer/report/` | Trainer: quarterly attendance report |
-| `/training/group/<id>/stats/` | Trainer/Admin (profile role): group attendance statistics |
+| `/training/group/<id>/stats/` | Trainer/Admin (profile role): group statistics – tab *Attendance* (default) and `?tab=times` (swim-time ranking) |
 | `/ws/session/<instance_id>/` | WebSocket endpoint (live attendance + training plan) |
 | `/groups/` | Group list |
 | `/swimmers/` | People search (person detail incl. attendance statistics for profile trainers/admins) |

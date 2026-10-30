@@ -57,6 +57,7 @@ translations/ Custom i18n package (NOT Django gettext – see below)
 - `TrainingPlanEntry` — ordered exercise blocks with category (warmup/main/cooldown)
 - `ExcuseToken` — UUID-based one-time URL for self-excuse without login
 - `Attendance` — per-swimmer per-session status (present/absent/excused/unknown)
+- `PerformanceResult` — one timed swim: swimmer, optional session, date, location, stroke, `distance_m`, `time_cs` (hundredths of a second), `pool_length` (25/50), `is_official` (False for all training times; reserved for competitions). Helpers in `training/performance.py` (`parse_time`, `format_time`); entry UI `static/js/results.js`, chart `static/js/performance_chart.js` (Chart.js 4 via CDN, swimmer detail page)
 
 ---
 
@@ -109,6 +110,8 @@ translations/
 | `/training/session/<id>/state/` | Polling fallback — returns current attendance + plan state |
 | `/training/session/<id>/attendance/` | REST attendance update (polling fallback for WS writes) |
 | `/training/session/<id>/add-swimmer/` | Trainer: add a swimmer to the live session |
+| `/training/session/<id>/results/` | Trainer: GET list / POST record swim times |
+| `/training/result/<id>/update/`, `/training/result/<id>/delete/` | Trainer: correct / delete one time |
 | `/training/session/<id>/plan-entry/photo-create/` | Trainer: new plan entry from a photo |
 | `/training/plan-entry/<id>/photo/` | Trainer: upload/remove a plan entry's photo |
 | `/training/recurring/new/<group_id>/`, `/training/recurring/<id>/edit/` | Trainer: manage recurring sessions |
@@ -133,6 +136,8 @@ translations/
 ---
 
 ## WebSocket + fallback
+
+Swim times: written via REST (`session_results_api`, `result_update_api`, `result_delete_api`); the views broadcast `broadcast_results` to group `session_<id>` and `SessionConsumer` forwards it as `{type: 'results_changed'}`; clients re-fetch the rendered list (`_reloadResultsList` in `static/js/results.js`, also called on WS `init` and from the polling fallback).
 
 1. `calendar.js` fetches session modal → view returns **JSON** `{html, instance_id, is_trainer}` (not bare HTML — `innerHTML` never executes script tags)
 2. If `instance_id` and `is_trainer` → `initSessionWebSocket(instanceId)` in `session.js`

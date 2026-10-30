@@ -13,7 +13,22 @@
   <span class="badge ms-2 fs-6" style="background:{{ group.color }}">{{ group.name }}</span>
 </h2>
 
+<ul class="nav nav-tabs mb-3" id="statsTabs">
+  <li class="nav-item">
+    <a class="nav-link {% if tab == 'attendance' %}active{% endif %}"
+       href="?{{ qs_base }}{% if qs_base %}&{% endif %}tab=attendance#stats"><i class="bi bi-person-check me-1"></i>{{ t.stats_tab_attendance }}</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if tab == 'times' %}active{% endif %}"
+       href="?{{ qs_base }}{% if qs_base %}&{% endif %}tab=times#stats"><i class="bi bi-stopwatch me-1"></i>{{ t.stats_tab_times }}</a>
+  </li>
+</ul>
+
 <div id="stats">{% include 'training/_stats_filter.html' %}</div>
+
+{% if tab == 'times' %}
+{% include 'training/_group_results.html' %}
+{% else %}
 
 {% if summary.optional_hidden and not f.include_optional %}
 <p class="text-muted small"><i class="bi bi-eye-slash me-1"></i>{{ summary.optional_hidden }} {{ t.stats_optional_hidden }}</p>
@@ -89,5 +104,6 @@
   </div>
   <p class="small text-muted mt-2 mb-0">{{ t.stats_hint_unknown }}</p>
 </div>
+{% endif %}
 {% endif %}
 {% endblock %}

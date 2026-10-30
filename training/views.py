@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import date, timedelta
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
@@ -7,15 +8,19 @@ from django.http import JsonResponse
 from django.urls import reverse
 from django.contrib import messages
 from django.db.models import Q, OuterRef, Subquery, Prefetch
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from translations.helpers import tr
 
 from .models import (
     RecurringSession, SessionException, SessionInstance, Attendance, ExcuseToken,
-    TrainingPlanEntry,
+    TrainingPlanEntry, PerformanceResult,
 )
 from groups.models import Group, GroupMembership
 from swimmers.models import Swimmer
-from . import stats
+from . import stats, performance
+
+logger = logging.getLogger(__name__)
 
 
 def _is_session_trainer(request, recurring_session):
@@ -267,6 +272,7 @@ def session_modal_view(request, session_id, session_date):
         'is_trainer': is_trainer,
         'created': created,
         'picker_options': _swimmer_picker_options() if (instance and is_trainer) else [],
+        'results_html': _session_results_html(request, instance) if (instance and is_trainer) else '',
     }, request=request)
 
     return JsonResponse({
@@ -793,7 +799,7 @@ def trainer_report_view(request):
 
 @login_required
 def group_stats_view(request, group_pk):
-    """Per-session attendance table and per-person ranking for one group."""
+    """Group statistics, two tabs: attendance (per-session table, ranking) and swim times."""
     group = get_object_or_404(Group, pk=group_pk)
     # Statistics inform club-level decisions: profile trainers and admins only.
     if not request.user.profile.is_trainer:
@@ -801,10 +807,179 @@ def group_stats_view(request, group_pk):
         return redirect('group_detail', pk=group.pk)
 
     f = stats.filter_context(request.GET)
-    result = stats.group_stats(
-        group, f['start'], f['end'],
-        include_optional=f['include_optional'], per_lane=f['per_lane'],
+    tab = 'times' if request.GET.get('tab') == 'times' else 'attendance'
+    params = request.GET.copy()
+    params.pop('tab', None)
+    ctx = {'group': group, 'f': f, 'tab': tab, 'qs_base': params.urlencode()}
+
+    if tab == 'times':
+        tf = performance.times_filter(request.GET)
+        result = performance.group_results(
+            group, f['start'], f['end'],
+            stroke=tf['stroke'], distance=tf['distance'], split_pools=tf['split_pools'],
+        )
+        for b in result['blocks']:
+            b['stroke_label'] = _stroke_label(request, b['stroke'])
+        result['stroke_options'] = [(c, _stroke_label(request, c)) for c in result['stroke_options']]
+        ctx.update(result, tf=tf, show_lanes_toggle=False, hide_optional=True)
+    else:
+        ctx.update(stats.group_stats(
+            group, f['start'], f['end'],
+            include_optional=f['include_optional'], per_lane=f['per_lane'],
+        ), show_lanes_toggle=True)
+    return render(request, 'training/group_stats.html', ctx)
+
+
+# ── Performance results (swim times) ─────────────────────────────────────────
+
+def _broadcast_results_changed(session_id):
+    """Tell every client connected to the session that its result list is stale.
+
+    Sent from the HTTP views (not relayed from a client), so the payload is
+    never client-controlled. Clients re-fetch the list themselves, which keeps
+    the HTML in their own language.
+    """
+    if not session_id:
+        return
+    layer = get_channel_layer()
+    if layer is None:
+        return
+    try:
+        async_to_sync(layer.group_send)(
+            f'session_{session_id}',
+            {'type': 'broadcast_results', 'data': {'session_id': session_id}},
+        )
+    except Exception:       # a missing broadcast must never fail the save
+        logger.warning('results broadcast failed for session %s', session_id, exc_info=True)
+
+
+def _stroke_label(request, stroke):
+    return tr(request, f'stroke_{stroke}')
+
+
+def _session_results_html(request, instance):
+    """Render the list of results recorded in one session, grouped by stroke and distance."""
+    from django.template.loader import render_to_string
+    groups = {}
+    qs = instance.results.select_related('swimmer').order_by('stroke', 'distance_m', 'time_cs')
+    for r in qs:
+        groups.setdefault((r.stroke, r.distance_m), []).append(r)
+    blocks = [
+        {'stroke_label': _stroke_label(request, stroke), 'distance': distance, 'results': rows,
+         'times': [performance.format_time(r.time_cs) for r in rows]}
+        for (stroke, distance), rows in groups.items()
+    ]
+    for b in blocks:                                   # pair each row with its formatted time
+        b['rows'] = list(zip(b['results'], b['times']))
+    return render_to_string('training/_session_results.html', {'blocks': blocks}, request=request)
+
+
+def _result_trainer_check(request, result):
+    """May this user change `result`? Session trainers, or profile trainers for session-less results."""
+    if result.session_id:
+        return _is_session_trainer(request, result.session.recurring_session)
+    return request.user.profile.is_trainer
+
+
+@login_required
+def session_results_api(request, instance_id):
+    """GET: rendered result list of the session. POST: record one stroke/distance for many swimmers.
+
+    POST body: ``{"stroke": "free", "distance": 50, "entries": [{"swimmer_id": 3, "time": "32,45"}]}``.
+    All entries are validated first; on any error nothing is saved and the
+    response carries ``{"errors": {"<swimmer_id>": "invalid_time"}}``.
+    """
+    instance = get_object_or_404(
+        SessionInstance.objects.select_related('recurring_session__location'), pk=instance_id
     )
-    return render(request, 'training/group_stats.html', {
-        'group': group, 'f': f, 'show_lanes_toggle': True, **result,
-    })
+    if not _is_session_trainer(request, instance.recurring_session):
+        return JsonResponse({'error': 'forbidden'}, status=403)
+
+    if request.method == 'GET':
+        return JsonResponse({'html': _session_results_html(request, instance)})
+    if request.method != 'POST':
+        return JsonResponse({'error': 'GET or POST only'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse({'error': 'invalid json'}, status=400)
+    if not isinstance(data, dict):
+        return JsonResponse({'error': 'invalid json'}, status=400)
+
+    stroke = data.get('stroke')
+    distance = data.get('distance')
+    entries = data.get('entries')
+    if stroke not in dict(PerformanceResult.STROKE_CHOICES):
+        return JsonResponse({'error': tr(request, 'msg_result_stroke_invalid')}, status=400)
+    if (isinstance(distance, bool) or not isinstance(distance, int)
+            or not 1 <= distance <= PerformanceResult.MAX_DISTANCE_M):
+        return JsonResponse({'error': tr(request, 'msg_result_distance_invalid')}, status=400)
+    if not isinstance(entries, list) or not entries or len(entries) > 300:
+        return JsonResponse({'error': tr(request, 'msg_result_no_entries')}, status=400)
+
+    session_swimmers = set(instance.attendances.values_list('swimmer_id', flat=True))
+    errors, parsed = {}, []
+    for e in entries:
+        sid = e.get('swimmer_id') if isinstance(e, dict) else None
+        if isinstance(sid, bool) or not isinstance(sid, int) or sid not in session_swimmers:
+            errors[str(sid)] = 'unknown_swimmer'
+            continue
+        cs = performance.parse_time(e.get('time'))
+        if cs is None:
+            errors[str(sid)] = 'invalid_time'
+            continue
+        parsed.append((sid, cs))
+    if errors:
+        return JsonResponse({'error': tr(request, 'msg_result_time_invalid'), 'errors': errors}, status=400)
+
+    location = instance.recurring_session.location
+    pool = PerformanceResult.pool_length_for(location)
+    PerformanceResult.objects.bulk_create([
+        PerformanceResult(
+            swimmer_id=sid, session=instance, date=instance.date, location=location,
+            stroke=stroke, distance_m=distance, time_cs=cs, pool_length=pool,
+            is_official=False, recorded_by=request.user,
+        )
+        for sid, cs in parsed
+    ])
+    _broadcast_results_changed(instance.pk)
+    return JsonResponse({'saved': len(parsed), 'html': _session_results_html(request, instance)})
+
+
+@login_required
+def result_update_api(request, result_id):
+    """Correct the time of one result."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    result = get_object_or_404(
+        PerformanceResult.objects.select_related('session__recurring_session__group'), pk=result_id
+    )
+    if not _result_trainer_check(request, result):
+        return JsonResponse({'error': 'forbidden'}, status=403)
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, TypeError):
+        return JsonResponse({'error': 'invalid json'}, status=400)
+    cs = performance.parse_time(data.get('time') if isinstance(data, dict) else None)
+    if cs is None:
+        return JsonResponse({'error': tr(request, 'msg_result_time_invalid')}, status=400)
+    result.time_cs = cs
+    result.save(update_fields=['time_cs'])
+    _broadcast_results_changed(result.session_id)
+    return JsonResponse({'id': result.pk, 'time': performance.format_time(cs)})
+
+
+@login_required
+def result_delete_api(request, result_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST only'}, status=405)
+    result = get_object_or_404(
+        PerformanceResult.objects.select_related('session__recurring_session__group'), pk=result_id
+    )
+    if not _result_trainer_check(request, result):
+        return JsonResponse({'error': 'forbidden'}, status=403)
+    session_id = result.session_id
+    result.delete()
+    _broadcast_results_changed(session_id)
+    return JsonResponse({'deleted': True})

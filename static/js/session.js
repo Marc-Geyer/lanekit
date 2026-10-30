@@ -75,7 +75,9 @@ function connectSessionWebSocket() {
       case 'init':
         handleInit(msg.data);
         window.SESSION_IS_TRAINER = msg.trainer;
+        if (typeof _reloadResultsList === 'function') _reloadResultsList();  // catch up after (re)connect
         break;
+      case 'results_changed':   if (typeof _reloadResultsList === 'function') _reloadResultsList(); break;
       case 'attendance_update':    handleAttendanceUpdate(msg.data);  break;
       case 'bulk_attendance_update': handleBulkAttendanceUpdate(msg.data); break;
       case 'plan_add':          handlePlanAdd(msg.data);           break;
@@ -207,6 +209,7 @@ function applyPolledState(data) {
 
   (data.attendances || []).forEach(att => applyAttendanceUpdate(att));
   handleNotesUpdate({ notes: data.trainer_notes });
+  if (typeof _reloadResultsList === 'function') _reloadResultsList();   // times have no WS in polling mode
 }
 
 function wsSend(action, data) {

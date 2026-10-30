@@ -143,6 +143,7 @@ document.addEventListener('DOMContentLoaded', function () {
     initSortable();
     updateAttendanceCounts();
     if (typeof initCollapsibleSections === 'function') initCollapsibleSections();
+    if (typeof initResultsPanel === 'function') initResultsPanel();
   }
 
   // Clean up when modal closes

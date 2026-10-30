@@ -1,0 +1,25 @@
+{# Context: blocks = [{stroke_label, distance, rows: [(PerformanceResult, formatted_time)]}] #}
+{% for b in blocks %}
+<div class="mb-3">
+  <div class="small fw-semibold mb-1"><i class="bi bi-stopwatch text-primary me-1"></i>{{ b.stroke_label }} · {{ b.distance }} m</div>
+  <table class="table table-sm align-middle mb-0">
+    <tbody>
+      {% for r, formatted in b.rows %}
+      <tr data-result-id="{{ r.pk }}" data-swimmer-id="{{ r.swimmer_id }}" data-stroke="{{ r.stroke }}" data-distance="{{ r.distance_m }}">
+        <td class="small">{{ r.swimmer.full_name }}</td>
+        <td class="text-end text-nowrap">
+          <span class="res-time fw-semibold">{{ formatted }}</span>
+          {% if not r.is_official %}<span class="badge bg-secondary ms-1" title="{{ t.result_unofficial_hint }}">{{ t.result_unofficial }}</span>{% endif %}
+        </td>
+        <td class="text-end text-nowrap" style="width:72px">
+          <button class="btn btn-xs btn-icon-only" title="{{ t.btn_edit }}" onclick="editResultTime({{ r.pk }})"><i class="bi bi-pencil" style="font-size:.75rem"></i></button>
+          <button class="btn btn-xs btn-icon-only text-danger" title="{{ t.btn_delete }}" onclick="deleteResult({{ r.pk }})"><i class="bi bi-trash" style="font-size:.75rem"></i></button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% empty %}
+<p class="text-muted small text-center py-2 mb-0">{{ t.results_none_yet }}</p>
+{% endfor %}

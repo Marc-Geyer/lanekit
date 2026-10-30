@@ -84,8 +84,14 @@ def swimmer_detail_view(request, pk):
                 f['start'], f['end'], include_optional=f['include_optional'],
             ),
         }
+    # Swim times: visible to whoever may edit the person (profile trainers, the person
+    # themself, trainers of the person's groups) – not to every logged-in member.
+    perf_ctx = {}
+    if can_edit:
+        from training import performance
+        perf_ctx = {'perf_data': performance.swimmer_results(swimmer)}
     return render(request, 'swimmers/detail.html', {
-        **stats_ctx,
+        **stats_ctx, **perf_ctx,
         'swimmer': swimmer, 'form': form,
         'memberships': memberships, 'can_edit': can_edit,
         'available_groups': available_groups,

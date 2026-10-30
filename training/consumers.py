@@ -149,6 +149,10 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
     async def broadcast_sync_attendance(self, event):
         await self.send_json({'type': 'sync_attendance', 'data': event['data']})
 
+    async def broadcast_results(self, event):
+        # Sent by the results HTTP views; clients re-fetch the list themselves.
+        await self.send_json({'type': 'results_changed', 'data': event['data']})
+
     async def broadcast_bulk_attendance(self, event):
         await self.send_json({'type': 'bulk_attendance_update', 'data': event['data']})
 

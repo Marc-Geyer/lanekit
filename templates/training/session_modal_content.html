@@ -274,6 +274,70 @@
   </div>
 </div>
 
+<!-- Swim times -->
+<div class="row g-3 mt-1">
+  <div class="col-12">
+    <div class="d-flex align-items-center justify-content-between mb-2 section-collapse-header"
+         data-bs-toggle="collapse" data-bs-target="#resultsBody" role="button" aria-expanded="false">
+      <h6 class="fw-bold mb-0"><i class="bi bi-stopwatch text-primary me-2"></i>{{ t.section_results }}</h6>
+      <i class="bi bi-chevron-down"></i>
+    </div>
+    <div class="collapse" id="resultsBody" data-instance="{{ instance.pk }}">
+      <div class="row g-3">
+        <div class="col-lg-6">
+          <div class="sc-card p-3">
+            <div class="d-flex flex-wrap gap-2 mb-2">
+              <select id="resStroke" class="form-select form-select-sm bg-transparent border-secondary text-light" style="width:auto">
+                <option value="free">{{ t.stroke_free }}</option>
+                <option value="back">{{ t.stroke_back }}</option>
+                <option value="breast">{{ t.stroke_breast }}</option>
+                <option value="fly">{{ t.stroke_fly }}</option>
+                <option value="medley">{{ t.stroke_medley }}</option>
+              </select>
+              <div class="input-group input-group-sm" style="width:9rem">
+                <input id="resDistance" type="number" min="1" max="10000" list="resDistances" value="50"
+                       class="form-control bg-transparent border-secondary text-light" aria-label="{{ t.result_distance }}">
+                <span class="input-group-text bg-transparent border-secondary text-muted">m</span>
+              </div>
+              <datalist id="resDistances">
+                <option value="25"><option value="50"><option value="100"><option value="200">
+                <option value="400"><option value="800"><option value="1500">
+              </datalist>
+            </div>
+            <p class="small text-muted mb-2">
+              <i class="bi bi-calendar2-event me-1"></i>{{ session_date|date:"d.m.Y" }}
+              {% if recurring.location %}· <i class="bi bi-geo-alt me-1"></i>{{ recurring.location }}{% endif %}
+              · <span class="badge bg-secondary">{{ t.result_unofficial }}</span>
+            </p>
+            <table class="table table-sm align-middle mb-1">
+              <tbody id="resEntryBody"></tbody>
+            </table>
+            <p class="small text-muted mb-2"><i class="bi bi-grip-vertical"></i> {{ t.results_sort_hint }}</p>
+            <div class="d-flex flex-wrap align-items-center gap-2">
+              <button class="btn btn-primary btn-sm rounded-pill px-3" id="resSaveBtn" onclick="saveResults()">
+                <i class="bi bi-floppy me-1"></i>{{ t.btn_save_results }}
+              </button>
+              <button class="btn btn-outline-secondary btn-sm rounded-pill px-3" onclick="buildResultEntryTable()">
+                <i class="bi bi-arrow-repeat me-1"></i>{{ t.btn_results_reload_present }}
+              </button>
+              <button class="btn btn-outline-secondary btn-sm rounded-pill px-3" onclick="sortResultEntryByName()" title="{{ t.btn_results_sort_name_hint }}">
+                <i class="bi bi-sort-alpha-down me-1"></i>{{ t.btn_results_sort_name }}
+              </button>
+              <small id="resMsg"></small>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-6">
+          <div class="sc-card p-3 h-100">
+            <h6 class="small text-muted mb-2">{{ t.results_recorded }}</h6>
+            <div id="resultsList">{{ results_html|safe }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Shared hidden file input for plan-entry photos, targeted via _editingEntryId in session.js -->
 {% if is_trainer %}
 <input type="file" id="planPhotoInput" accept="image/*" style="display:none">

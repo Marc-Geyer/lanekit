@@ -319,3 +319,78 @@ class Attendance(models.Model):
             'notes': self.notes,
             'marked_by': self.marked_by.get_full_name() if self.marked_by else None,
         }
+
+
+class PerformanceResult(models.Model):
+    """A single timed swim of one swimmer (training time or, later, competition time).
+
+    Times are stored in hundredths of a second so they stay exact and sortable.
+    ``is_official`` is False for everything recorded in training; it exists so
+    competition results can be added later without a schema change.
+    """
+    STROKE_FREE = 'free'
+    STROKE_BACK = 'back'
+    STROKE_BREAST = 'breast'
+    STROKE_FLY = 'fly'
+    STROKE_MEDLEY = 'medley'
+    STROKE_CHOICES = [
+        (STROKE_FREE, 'Freistil'),
+        (STROKE_BACK, 'Rücken'),
+        (STROKE_BREAST, 'Brust'),
+        (STROKE_FLY, 'Schmetterling'),
+        (STROKE_MEDLEY, 'Lagen'),
+    ]
+    POOL_CHOICES = [(25, '25 m'), (50, '50 m')]
+    MAX_TIME_CS = 3 * 3600 * 100     # 3 h – anything above is certainly a typo
+    MAX_DISTANCE_M = 10000
+
+    swimmer = models.ForeignKey(Swimmer, on_delete=models.CASCADE, related_name='results')
+    session = models.ForeignKey(
+        SessionInstance, null=True, blank=True, on_delete=models.SET_NULL, related_name='results',
+        help_text='Training session in which the time was swum (empty for e.g. competitions).'
+    )
+    date = models.DateField(help_text='Day the performance was swum.')
+    location = models.ForeignKey(
+        Location, null=True, blank=True, on_delete=models.SET_NULL, related_name='results'
+    )
+    stroke = models.CharField(max_length=10, choices=STROKE_CHOICES)
+    distance_m = models.PositiveSmallIntegerField(validators=[MinValueValidator(1)])
+    time_cs = models.PositiveIntegerField(
+        validators=[MinValueValidator(1)], help_text='Swim time in hundredths of a second.'
+    )
+    pool_length = models.PositiveSmallIntegerField(
+        null=True, blank=True, choices=POOL_CHOICES,
+        help_text='25 or 50 m course. Taken from the location when empty; '
+                  'times of different course lengths are not directly comparable.'
+    )
+    is_official = models.BooleanField(
+        default=False, help_text='Official (competition) time. False for all training times.'
+    )
+    notes = models.CharField(max_length=200, blank=True)
+    recorded_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date', '-id']
+        indexes = [models.Index(fields=['swimmer', 'date'])]
+
+    def __str__(self):
+        return f'{self.swimmer} – {self.distance_m} m {self.stroke}: {self.time_cs / 100:.2f} s ({self.date})'
+
+    @staticmethod
+    def pool_length_for(location):
+        """Course length implied by a location (None for non-pool / unknown)."""
+        if location is None:
+            return None
+        return {Location.TYPE_25M: 25, Location.TYPE_50M: 50}.get(location.type)
+
+    def clean(self):
+        if self.time_cs is not None and self.time_cs > self.MAX_TIME_CS:
+            raise ValidationError({'time_cs': 'Time is implausibly long.'})
+        if self.distance_m is not None and self.distance_m > self.MAX_DISTANCE_M:
+            raise ValidationError({'distance_m': 'Distance is implausibly long.'})
+
+    def save(self, *args, **kwargs):
+        if self.pool_length is None:
+            self.pool_length = self.pool_length_for(self.location)
+        super().save(*args, **kwargs)

@@ -1,0 +1,67 @@
+{# Context: perf_data (list of result dicts). Chart logic lives in static/js/performance_chart.js #}
+<div id="perf" class="sc-card p-4 mb-4">
+  <h5 class="fw-bold mb-3"><i class="bi bi-graph-up-arrow text-primary me-2"></i>{{ t.perf_title }}</h5>
+  {{ perf_data|json_script:"perfData" }}
+  <p id="perfEmpty" class="text-muted text-center py-3 mb-0" style="display:none">{{ t.perf_empty }}</p>
+
+  <div id="perfBody" style="display:none">
+    <div class="row g-2 align-items-end mb-3">
+      <div class="col-12">
+        <div class="small text-muted mb-1">{{ t.perf_filter_stroke }}</div>
+        <div id="perfStrokes" class="d-flex flex-wrap gap-1"></div>
+      </div>
+      <div class="col-12">
+        <div class="small text-muted mb-1">{{ t.perf_filter_distance }}</div>
+        <div id="perfDistances" class="d-flex flex-wrap gap-1"></div>
+      </div>
+      <div class="col-12" id="perfPoolsWrap">
+        <div class="small text-muted mb-1">{{ t.perf_filter_pool }}</div>
+        <div id="perfPools" class="d-flex flex-wrap gap-1"></div>
+        <div class="form-check mt-2 mb-0">
+          <input class="form-check-input" type="checkbox" id="perfSplitPools" checked>
+          <label class="form-check-label small" for="perfSplitPools">{{ t.perf_pool_split }}</label>
+        </div>
+        <p id="perfMergeHint" class="small text-warning mb-0" style="display:none"><i class="bi bi-exclamation-triangle me-1"></i>{{ t.perf_pool_merge_hint }}</p>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="small text-muted" for="perfFrom">{{ t.perf_filter_from }}</label>
+        <input type="date" id="perfFrom" class="form-control form-control-sm bg-transparent border-secondary text-light">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="small text-muted" for="perfTo">{{ t.perf_filter_to }}</label>
+        <input type="date" id="perfTo" class="form-control form-control-sm bg-transparent border-secondary text-light">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="small text-muted" for="perfMode">{{ t.perf_y_mode }}</label>
+        <select id="perfMode" class="form-select form-select-sm bg-transparent border-secondary text-light">
+          <option value="time">{{ t.perf_mode_time }}</option>
+          <option value="pace">{{ t.perf_mode_pace }}</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-3 d-flex flex-column gap-1">
+        <div class="form-check form-check-inline m-0">
+          <input class="form-check-input" type="checkbox" id="perfOfficial" checked>
+          <label class="form-check-label small" for="perfOfficial">{{ t.result_official }}</label>
+        </div>
+        <div class="form-check form-check-inline m-0">
+          <input class="form-check-input" type="checkbox" id="perfUnofficial" checked>
+          <label class="form-check-label small" for="perfUnofficial">{{ t.result_unofficial }}</label>
+        </div>
+      </div>
+    </div>
+
+    <p id="perfNoMatch" class="text-muted text-center py-3 mb-0" style="display:none">{{ t.perf_no_match }}</p>
+    <div id="perfChartWrap" style="position:relative;height:340px"><canvas id="perfChart"></canvas></div>
+    <p class="small text-muted mt-2 mb-3"><i class="bi bi-info-circle me-1"></i>{{ t.perf_legend_hint }}</p>
+
+    <div id="perfTableWrap" class="table-responsive" style="max-height:320px;overflow-y:auto">
+      <table class="table table-sm table-hover align-middle mb-0">
+        <thead><tr>
+          <th>{{ t.trainer_report_col_date }}</th><th>{{ t.perf_col_discipline }}</th>
+          <th>{{ t.perf_col_time }}</th><th>{{ t.perf_col_location }}</th><th></th>
+        </tr></thead>
+        <tbody id="perfTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>

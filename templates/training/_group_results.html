@@ -1,0 +1,44 @@
+{# Group swim-time overview. Context: blocks, total_results, total_swimmers, tf, f #}
+<div class="sc-card p-3 mb-3">
+  <div class="row g-2 text-center">
+    <div class="col-6"><div class="fs-4 fw-bold">{{ total_results }}</div><div class="small text-muted">{{ t.gtimes_times }}</div></div>
+    <div class="col-6"><div class="fs-4 fw-bold">{{ total_swimmers }}</div><div class="small text-muted">{{ t.gtimes_swimmers }}</div></div>
+  </div>
+  <p class="small text-muted mt-2 mb-0"><i class="bi bi-info-circle me-1"></i>{{ t.gtimes_hint }}</p>
+  {% if not tf.split_pools %}
+  <p class="small text-warning mt-1 mb-0"><i class="bi bi-exclamation-triangle me-1"></i>{{ t.gtimes_pool_merge_hint }}</p>
+  {% endif %}
+</div>
+
+{% for b in blocks %}
+<div class="sc-card p-0 mb-3">
+  <div class="px-3 pt-3 pb-1 fw-semibold">
+    <i class="bi bi-stopwatch text-primary me-1"></i>{{ b.stroke_label }} · {{ b.distance }} m
+    {% if b.pool %}<span class="badge bg-secondary ms-1">{{ b.pool }} m {{ t.perf_filter_pool }}</span>{% endif %}
+    {% if b.mixed_pools %}<i class="bi bi-exclamation-triangle text-warning ms-1" title="{{ t.gtimes_pool_merge_hint }}"></i>{% endif %}
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead><tr>
+        <th style="width:2.5rem">#</th><th></th>
+        <th class="text-end">{{ t.gtimes_col_best }}</th><th class="text-end">{{ t.gtimes_col_latest }}</th>
+        <th class="text-end">{{ t.gtimes_col_count }}</th><th class="text-end">{{ t.gtimes_col_change }}</th>
+      </tr></thead>
+      <tbody>
+        {% for r in b.rows %}
+        <tr>
+          <td class="text-muted">{{ forloop.counter }}</td>
+          <td><a href="{% url 'swimmer_detail' r.swimmer.pk %}" class="text-decoration-none text-light">{{ r.swimmer.full_name }}</a></td>
+          <td class="text-end text-nowrap fw-semibold">{{ r.best }} <span class="text-muted small fw-normal">{{ r.best_date|date:"d.m.Y" }}</span></td>
+          <td class="text-end text-nowrap">{{ r.latest }} <span class="text-muted small">{{ r.latest_date|date:"d.m.Y" }}</span></td>
+          <td class="text-end">{{ r.count }}</td>
+          <td class="text-end text-nowrap {% if r.change_cs is None %}text-muted{% elif r.change_cs < 0 %}text-success{% elif r.change_cs > 0 %}text-danger{% endif %}">{{ r.change|default:"–" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% empty %}
+<div class="sc-card p-4 text-center text-muted">{{ t.gtimes_empty }}</div>
+{% endfor %}

@@ -223,10 +223,32 @@ const UI_STRINGS = {
   catMain:     "{{ t.cat_main|escapejs }}",
   catCooldown: "{{ t.cat_cooldown|escapejs }}",
 };
+const RESULT_STRINGS = {
+  noPresent:     "{{ t.results_no_present|escapejs }}",
+  needTime:      "{{ t.results_need_time|escapejs }}",
+  saved:         "{{ t.results_saved|escapejs }}",
+  error:         "{{ t.results_error|escapejs }}",
+  confirmDelete: "{{ t.confirm_delete_result|escapejs }}",
+  alreadyRecorded: "{{ t.results_already|escapejs }}",
+  official:      "{{ t.result_official|escapejs }}",
+  unofficial:    "{{ t.result_unofficial|escapejs }}",
+  best:          "{{ t.perf_best|escapejs }}",
+  yTime:         "{{ t.perf_mode_time|escapejs }}",
+  yPace:         "{{ t.perf_mode_pace|escapejs }}",
+  chartUnavailable: "{{ t.perf_chart_unavailable|escapejs }}",
+  strokes: {
+    free:   "{{ t.stroke_free|escapejs }}",
+    back:   "{{ t.stroke_back|escapejs }}",
+    breast: "{{ t.stroke_breast|escapejs }}",
+    fly:    "{{ t.stroke_fly|escapejs }}",
+    medley: "{{ t.stroke_medley|escapejs }}",
+  },
+};
 </script>
 
 {% load static %}
 <script src="{% static 'js/session.js' %}"></script>
+<script src="{% static 'js/results.js' %}"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js', {scope: '/'}).catch(() => {}));
