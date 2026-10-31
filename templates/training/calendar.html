@@ -22,7 +22,7 @@
       </button>
     </div>
     {% endif %}
-    {% if user.is_authenticated and user.profile.is_trainer %}
+    {% if can_create_exception %}
     <a href="{% url 'exception_create' %}" class="btn btn-outline-danger btn-sm rounded-pill px-3">
       <i class="bi bi-calendar-x me-1"></i>{{ t.btn_exception }}
     </a>
@@ -51,7 +51,7 @@
 const CALENDAR_EVENTS_URL = "{% url 'calendar_events_api' %}";
 const SESSION_MODAL_URL_TEMPLATE = "/training/session/{session_id}/{date}/";
 const IS_AUTHENTICATED = {{ user.is_authenticated|yesno:"true,false" }};
-{% if user.is_authenticated and user.profile.is_trainer %}
+{% if is_level_trainer %}
 const IS_TRAINER = true;
 {% else %}
 const IS_TRAINER = false;

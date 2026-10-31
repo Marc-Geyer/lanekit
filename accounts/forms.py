@@ -62,10 +62,16 @@ class UserProfileForm(forms.ModelForm):
         user = kwargs.pop('user', None)
         # Only admins may change the role – otherwise any user could promote themselves.
         can_edit_role = kwargs.pop('can_edit_role', False)
+        # Name and phone sync to the person record; whoever may not edit that record directly
+        # (swimmers, assistants) changes it through a proposal instead.
+        lock_person_fields = kwargs.pop('lock_person_fields', False)
         super().__init__(*args, **kwargs)
         self._user = user
         if not can_edit_role:
             self.fields['role'].disabled = True   # disabled fields ignore POSTed values
+        if lock_person_fields:
+            for name in ('first_name', 'last_name', 'phone'):
+                self.fields[name].disabled = True
         if user:
             self.fields['first_name'].initial = user.first_name
             self.fields['last_name'].initial = user.last_name

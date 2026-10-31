@@ -11,6 +11,7 @@ from django.db.models import Q, OuterRef, Subquery, Prefetch
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from translations.helpers import tr
+from accounts import permissions as perm
 
 from .models import (
     RecurringSession, SessionException, SessionInstance, Attendance, ExcuseToken,
@@ -24,18 +25,13 @@ logger = logging.getLogger(__name__)
 
 
 def _is_session_trainer(request, recurring_session):
-    """Return True if the current user may manage this recurring session's group."""
-    if not request.user.is_authenticated:
-        return False
-    return (
-        request.user.profile.is_admin or
-        GroupMembership.objects.filter(
-            group=recurring_session.group,
-            swimmer__user=request.user,
-            role=GroupMembership.ROLE_TRAINER,
-            active=True,
-        ).exists()
-    )
+    """May the current user operate this session's modal (assistant, trainer of the group, admin)?
+    Structuring the plan needs the stricter :func:`_can_edit_plan`."""
+    return perm.can_operate_session(request.user, recurring_session.group_id)
+
+
+def _can_edit_plan(request, recurring_session):
+    return perm.can_edit_plan(request.user, recurring_session.group_id)
 
 
 # ── Calendar main view ───────────────────────────────────────────────────────
@@ -192,13 +188,39 @@ def calendar_events_api(request):
                 })
         current += timedelta(days=1)
 
+    if not perm.can_view_calendar_details(request.user):
+        events = [_public_event(i, e) for i, e in enumerate(events)]
     return JsonResponse(events, safe=False)
+
+
+def _public_event(index, event):
+    """What anonymous visitors get: the group name and the time slot – no location, no
+    cancellation reason, no ids that would let them open a session."""
+    props = event['extendedProps']
+    cancelled = props['type'] == 'exception'
+    return {
+        'id': f'pub_{index}',
+        'title': f"{props['group']} – Abgesagt" if cancelled else props['group'],
+        'start': event['start'],
+        'end': event['end'],
+        'backgroundColor': event['backgroundColor'],
+        'borderColor': event['borderColor'],
+        'textColor': event['textColor'],
+        'classNames': ['session-exception'] if cancelled else ['session-planned'],
+        'extendedProps': {'type': 'public', 'group': props['group']},
+    }
 
 
 # ── Session modal content (AJAX) ─────────────────────────────────────────────
 
 def session_modal_view(request, session_id, session_date):
-    """Return HTML for the session modal. Creates instance if trainer requests it."""
+    """Return HTML for the session modal. Creates the instance if staff requests it (POST).
+
+    Staff (assistant or higher in the group) get the full modal. Everybody else logged in gets the
+    header only – except for a FINISHED session they took part in, where they additionally see
+    the plan, their own attendance and their own times. Anonymous: 403."""
+    if not perm.is_authenticated(request.user):
+        return JsonResponse({'error': 'forbidden'}, status=403)
     try:
         session_date_obj = date.fromisoformat(session_date)
     except ValueError:
@@ -209,11 +231,10 @@ def session_modal_view(request, session_id, session_date):
         recurring_session=recurring, date=session_date_obj
     ).first()
 
-    is_trainer = False
-    if request.user.is_authenticated:
-        is_trainer = _is_session_trainer(request, recurring)
+    is_trainer = _is_session_trainer(request, recurring)      # may operate the modal
+    can_edit_plan = _can_edit_plan(request, recurring)        # may structure the plan
 
-    # Auto-create instance when trainer opens the modal
+    # Auto-create instance when staff opens the modal
     created = False
     if not instance and is_trainer and request.method == 'POST':
         instance = SessionInstance.objects.create(
@@ -233,9 +254,23 @@ def session_modal_view(request, session_id, session_date):
         )
         created = True
 
+    participant = None
+    if instance and not is_trainer and perm.session_view(request.user, instance) == perm.SessionView.PARTICIPANT:
+        own = perm.own_swimmer(request.user)
+        participant = {
+            # Participants only see what was actually done; open items stay with the trainers.
+            'plan_entries': list(instance.plan_entries.filter(checked=True)),
+            'attendance': instance.attendances.filter(swimmer=own).first(),
+            'results': [
+                {'stroke': _stroke_label(request, r.stroke), 'distance': r.distance_m,
+                 'time': performance.format_time(r.time_cs)}
+                for r in instance.results.filter(swimmer=own).order_by('stroke', 'distance_m', 'time_cs')
+            ],
+        }
+
     plan_entries = []
     attendances = []
-    if instance:
+    if instance and is_trainer:
         plan_entries = list(instance.plan_entries.all())
         role_subquery = (
             GroupMembership.objects
@@ -263,6 +298,7 @@ def session_modal_view(request, session_id, session_date):
     # from the JSON — this avoids the innerHTML <script> execution problem
     # where injected script tags are silently ignored by the browser.
     from django.template.loader import render_to_string
+    show_staff = bool(instance and is_trainer)
     html = render_to_string('training/session_modal_content.html', {
         'recurring': recurring,
         'instance': instance,
@@ -270,16 +306,23 @@ def session_modal_view(request, session_id, session_date):
         'plan_entries': plan_entries,
         'attendances': attendances,
         'is_trainer': is_trainer,
+        'can_edit_plan': can_edit_plan,
+        'can_create_person': perm.can_create_person_in_session(request.user, recurring.group_id),
+        'can_join_group': perm.can_manage_group(request.user, recurring.group_id),
+        'participant': participant,
         'created': created,
-        'picker_options': _swimmer_picker_options() if (instance and is_trainer) else [],
-        'results_html': _session_results_html(request, instance) if (instance and is_trainer) else '',
-        'result_trainer_ids': _group_trainer_ids(recurring.group) if (instance and is_trainer) else [],
+        'picker_options': _swimmer_picker_options(
+            include_groups=perm.can_manage_group(request.user, recurring.group_id)
+        ) if show_staff else [],
+        'results_html': _session_results_html(request, instance) if show_staff else '',
+        'result_trainer_ids': _group_trainer_ids(recurring.group) if show_staff else [],
     }, request=request)
 
     return JsonResponse({
         'html': html,
         'instance_id': instance.pk if instance else None,
         'is_trainer': is_trainer,
+        'can_edit_plan': can_edit_plan,
     })
 
 
@@ -325,14 +368,30 @@ def session_settings_api(request, instance_id):
 
 @login_required
 def session_state_api(request, instance_id):
-    """Return the same state payload the WebSocket sends on connect."""
+    """Return the same state payload the WebSocket sends on connect (staff), or the read-only
+    own-data payload of a finished session (participants). Everybody else: 403."""
     instance = get_object_or_404(
         SessionInstance.objects.select_related('recurring_session__group'), pk=instance_id
     )
     recurring = instance.recurring_session
-    is_trainer = _is_session_trainer(request, recurring)
+    view = perm.session_view(request.user, instance)
+    if view == perm.SessionView.NONE:
+        return JsonResponse({'error': 'forbidden'}, status=403)
 
     entries = [e.to_dict() for e in instance.plan_entries.all()]
+    if view == perm.SessionView.PARTICIPANT:
+        entries = [e for e in entries if e.get('checked')]      # only what was actually done
+        own = perm.own_swimmer(request.user)
+        mine = instance.attendances.select_related('swimmer', 'marked_by').filter(swimmer=own)
+        return JsonResponse({
+            'session_id': instance.pk,
+            'trainer_notes': '',
+            'plan_entries': entries,
+            'attendances': [a.to_dict() for a in mine],
+            'is_trainer': False,
+            'can_edit_plan': False,
+        })
+
     attendances = [
         a.to_dict()
         for a in instance.attendances.select_related('swimmer', 'marked_by').distinct()
@@ -342,7 +401,8 @@ def session_state_api(request, instance_id):
         'trainer_notes': instance.trainer_notes,
         'plan_entries': entries,
         'attendances': attendances,
-        'is_trainer': is_trainer,
+        'is_trainer': True,
+        'can_edit_plan': _can_edit_plan(request, recurring),
     })
 
 
@@ -364,6 +424,8 @@ def session_attendance_update_api(request, instance_id):
         return JsonResponse({'error': 'invalid json'}, status=400)
 
     swimmer = get_object_or_404(Swimmer, pk=data.get('swimmer_id'))
+    if not perm.swimmer_on_session(instance, swimmer.pk):
+        return JsonResponse({'error': 'forbidden'}, status=403)
     att, _ = Attendance.objects.get_or_create(session=instance, swimmer=swimmer)
     att.status = data.get('status', att.status)
     att.notes = data.get('notes', att.notes)
@@ -374,7 +436,7 @@ def session_attendance_update_api(request, instance_id):
 
 # ── Quick add: new arrival / guest during a session ──────────────────────────
 
-def _swimmer_picker_options():
+def _swimmer_picker_options(include_groups=True):
     """All active people as {id, name, groups} for the client-side search in the
     "new / guest" panel. Whether someone is already on the attendance list is
     decided in the browser from the rows currently shown, so it stays correct
@@ -389,7 +451,8 @@ def _swimmer_picker_options():
         {
             'id': p.pk,
             'name': f'{p.first_name} {p.last_name}'.strip(),
-            'groups': ', '.join(sorted({m.group.name for m in p.groupmembership_set.all()})),
+            # Other groups' names only for those who may manage groups (assistants see names only).
+            'groups': ', '.join(sorted({m.group.name for m in p.groupmembership_set.all()})) if include_groups else '',
         }
         for p in people
     ]
@@ -417,10 +480,19 @@ def session_add_swimmer_api(request, instance_id):
     except (json.JSONDecodeError, TypeError):
         return JsonResponse({'error': 'invalid json'}, status=400)
 
+    wants_join = bool(data.get('join_group'))
+    if wants_join and not perm.can_manage_group(request.user, recurring.group_id):
+        return JsonResponse({'error': 'forbidden'}, status=403)      # membership changes: trainers only
+
     created = False
     if data.get('swimmer_id'):
         swimmer = get_object_or_404(Swimmer, pk=data['swimmer_id'], active=True)
     else:
+        # Creating a person is a trainer right and the person always joins the group
+        # (trainers only handle people of their own groups).
+        if not perm.can_create_person_in_session(request.user, recurring.group_id):
+            return JsonResponse({'error': 'forbidden'}, status=403)
+        data['join_group'] = True
         first = str(data.get('first_name') or '').strip()[:100]
         last = str(data.get('last_name') or '').strip()[:100]
         if not first or not last:
@@ -487,7 +559,7 @@ def plan_entry_photo_view(request, entry_id):
         pk=entry_id,
     )
     recurring = entry.session.recurring_session
-    if not _is_session_trainer(request, recurring):
+    if not _can_edit_plan(request, recurring):
         return JsonResponse({'error': 'forbidden'}, status=403)
 
     if request.method == 'POST':
@@ -526,7 +598,7 @@ def plan_entry_photo_create_view(request, instance_id):
         pk=instance_id,
     )
     recurring = instance.recurring_session
-    if not _is_session_trainer(request, recurring):
+    if not _can_edit_plan(request, recurring):
         return JsonResponse({'error': 'forbidden'}, status=403)
 
     if request.method != 'POST':
@@ -584,16 +656,25 @@ def use_excuse_token_view(request, token):
 @login_required
 def generate_excuse_token_view(request):
     """Trainer generates an excuse token link for a swimmer."""
-    if not request.user.profile.is_trainer:
-        return JsonResponse({'error': 'forbidden'}, status=403)
     if request.method == 'POST':
-        data = json.loads(request.body)
-        swimmer = get_object_or_404(Swimmer, pk=data['swimmer_id'])
-        recurring = get_object_or_404(RecurringSession, pk=data['session_id'])
+        try:
+            data = json.loads(request.body)
+            swimmer = get_object_or_404(Swimmer, pk=data['swimmer_id'])
+            recurring = get_object_or_404(RecurringSession, pk=data['session_id'])
+        except (json.JSONDecodeError, TypeError, KeyError, ValueError):
+            return JsonResponse({'error': 'invalid json'}, status=400)
+        if not _is_session_trainer(request, recurring):
+            return JsonResponse({'error': 'forbidden'}, status=403)
         try:
             session_date = date.fromisoformat(data['date'])
         except (KeyError, ValueError):
             return JsonResponse({'error': 'invalid date'}, status=400)
+        # Only for people who belong to this session: group members or people on that day's list.
+        on_session = GroupMembership.objects.filter(
+            group_id=recurring.group_id, swimmer=swimmer, active=True).exists() or Attendance.objects.filter(
+            swimmer=swimmer, session__recurring_session=recurring, session__date=session_date).exists()
+        if not on_session:
+            return JsonResponse({'error': 'forbidden'}, status=403)
         token, _ = ExcuseToken.objects.get_or_create(
             swimmer=swimmer,
             recurring_session=recurring,
@@ -602,6 +683,8 @@ def generate_excuse_token_view(request):
         )
         url = request.build_absolute_uri(token.get_excuse_url())
         return JsonResponse({'token': str(token.token), 'url': url})
+    if not perm.is_authenticated(request.user):
+        return JsonResponse({'error': 'forbidden'}, status=403)
     return JsonResponse({'error': 'POST only'}, status=405)
 
 
@@ -610,12 +693,9 @@ def generate_excuse_token_view(request):
 @login_required
 def recurring_session_create(request, group_pk):
     group = get_object_or_404(Group, pk=group_pk)
-    is_trainer = request.user.profile.is_admin or GroupMembership.objects.filter(
-        group=group, swimmer__user=request.user, role=GroupMembership.ROLE_TRAINER
-    ).exists()
-    if not is_trainer:
+    if not perm.can_manage_group(request.user, group.pk):
         messages.error(request, tr(request, 'msg_no_permission'))
-        return redirect('group_detail', pk=group_pk)
+        return redirect('group_list')
     from .forms import RecurringSessionForm
     form = RecurringSessionForm(request.POST or None, initial={'group': group})
     if request.method == 'POST' and form.is_valid():
@@ -633,12 +713,9 @@ def recurring_session_create(request, group_pk):
 @login_required
 def recurring_session_edit(request, pk):
     session = get_object_or_404(RecurringSession, pk=pk)
-    is_trainer = request.user.profile.is_admin or GroupMembership.objects.filter(
-        group=session.group, swimmer__user=request.user, role=GroupMembership.ROLE_TRAINER
-    ).exists()
-    if not is_trainer:
+    if not perm.can_manage_group(request.user, session.group_id):
         messages.error(request, tr(request, 'msg_no_permission'))
-        return redirect('group_detail', pk=session.group_id)
+        return redirect('group_list')
     from .forms import RecurringSessionForm
     form = RecurringSessionForm(request.POST or None, instance=session)
     if request.method == 'POST' and form.is_valid():
@@ -654,11 +731,11 @@ def recurring_session_edit(request, pk):
 
 @login_required
 def exception_create(request):
-    if not request.user.profile.is_trainer:
+    if not perm.can_create_exception(request.user):
         messages.error(request, tr(request, 'msg_no_permission'))
         return redirect('calendar')
     from .forms import SessionExceptionForm
-    form = SessionExceptionForm(request.POST or None, request=request)
+    form = SessionExceptionForm(request.POST or None, request=request, user=request.user)
     if request.method == 'POST' and form.is_valid():
         exc = form.save(commit=False)
         exc.created_by = request.user
@@ -697,17 +774,10 @@ def trainer_report_view(request):
     they hold the trainer role in the session's group. The swimmer count is the
     number of present attendees who are not trainers of that group.
     """
-    swimmer = Swimmer.objects.filter(user=request.user).first()
-    trainer_group_ids = set()
-    if swimmer:
-        # Deliberately not filtered by `active`: a trainer who left a group
-        # mid-quarter must still be able to report the sessions they led.
-        trainer_group_ids = set(
-            GroupMembership.objects
-            .filter(swimmer=swimmer, role=GroupMembership.ROLE_TRAINER)
-            .values_list('group_id', flat=True)
-        )
-    if not trainer_group_ids:
+    swimmer = perm.own_swimmer(request.user)
+    # Deliberately not limited to active memberships (see permissions.trainer_report_group_ids).
+    trainer_group_ids = perm.trainer_report_group_ids(request.user)
+    if not trainer_group_ids and not perm.is_admin(request.user):
         messages.error(request, tr(request, 'msg_no_permission'))
         return redirect('calendar')
 
@@ -802,10 +872,10 @@ def trainer_report_view(request):
 def group_stats_view(request, group_pk):
     """Group statistics, two tabs: attendance (per-session table, ranking) and swim times."""
     group = get_object_or_404(Group, pk=group_pk)
-    # Statistics inform club-level decisions: profile trainers and admins only.
-    if not request.user.profile.is_trainer:
+    # Statistics: trainers of THIS group and admins only.
+    if not perm.can_view_group_stats(request.user, group.pk):
         messages.error(request, tr(request, 'msg_no_permission'))
-        return redirect('group_detail', pk=group.pk)
+        return redirect('group_list')
 
     f = stats.filter_context(request.GET)
     tab = 'times' if request.GET.get('tab') == 'times' else 'attendance'
@@ -886,9 +956,7 @@ def _session_results_html(request, instance):
 
 def _result_trainer_check(request, result):
     """May this user change `result`? Session trainers, or profile trainers for session-less results."""
-    if result.session_id:
-        return _is_session_trainer(request, result.session.recurring_session)
-    return request.user.profile.is_trainer
+    return perm.can_manage_result(request.user, result)
 
 
 @login_required

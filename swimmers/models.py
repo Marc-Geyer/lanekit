@@ -53,3 +53,46 @@ class Swimmer(models.Model):
     def get_groups(self):
         from groups.models import GroupMembership
         return GroupMembership.objects.filter(swimmer=self).select_related('group')
+
+
+    @property
+    def age(self):
+        """Age in full years, or None when no birthday is known."""
+        if not self.date_of_birth:
+            return None
+        from datetime import date
+        today = date.today()
+        dob = self.date_of_birth
+        return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
+
+class PersonChangeRequest(models.Model):
+    """A swimmer's proposal to change their own person record.
+
+    Swimmers never edit their record directly; a trainer of one of the person's groups
+    (or an admin) accepts or rejects the proposal.  ``changes`` maps field name → proposed
+    value (dates as ISO strings); only fields that actually differ are stored.
+    """
+
+    STATUS_PENDING = 'pending'
+    STATUS_APPROVED = 'approved'
+    STATUS_REJECTED = 'rejected'
+    STATUS_CHOICES = [
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_APPROVED, 'Approved'),
+        (STATUS_REJECTED, 'Rejected'),
+    ]
+
+    swimmer = models.ForeignKey(Swimmer, on_delete=models.CASCADE, related_name='change_requests')
+    proposed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    changes = models.JSONField(default=dict)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.swimmer} – {self.status}'

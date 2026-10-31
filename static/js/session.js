@@ -73,8 +73,9 @@ function connectSessionWebSocket() {
     const msg = JSON.parse(event.data);
     switch (msg.type) {
       case 'init':
-        handleInit(msg.data);
         window.SESSION_IS_TRAINER = msg.trainer;
+        window.SESSION_CAN_EDIT_PLAN = !!msg.can_edit_plan;
+        handleInit(msg.data);
         if (typeof _reloadResultsList === 'function') _reloadResultsList();  // catch up after (re)connect
         break;
       case 'results_changed':   if (typeof _reloadResultsList === 'function') _reloadResultsList(); break;
@@ -186,6 +187,7 @@ function pollSessionState() {
 
 function applyPolledState(data) {
   window.SESSION_IS_TRAINER = data.is_trainer;
+  window.SESSION_CAN_EDIT_PLAN = !!data.can_edit_plan;
 
   window._planCache = window._planCache || {};
   (data.plan_entries || []).forEach(e => { window._planCache[e.id] = e; });
@@ -859,24 +861,25 @@ window.viewPlanEntryPhoto = function (url) {
 
 function renderPlanEntryHTML(entry) {
   const cat     = entry.category || 'main';
-  const trainer = window.SESSION_IS_TRAINER;
+  const trainer = window.SESSION_IS_TRAINER;          // may tick entries off
+  const edit    = window.SESSION_CAN_EDIT_PLAN;       // may create / edit / delete / reorder
   const catLabel = { warmup: UI_STRINGS.catWarmup, main: UI_STRINGS.catMain, cooldown: UI_STRINGS.catCooldown }[cat] || cat;
   return `
   <div class="plan-entry-row d-flex align-items-center gap-2${entry.checked ? ' is-checked' : ''}" data-entry-id="${entry.id}">
-    ${trainer ? '<span class="drag-handle"><i class="bi bi-grip-vertical"></i></span>' : ''}
+    ${edit ? '<span class="drag-handle"><i class="bi bi-grip-vertical"></i></span>' : ''}
     ${trainer
       ? `<input type="checkbox" class="plan-check" ${entry.checked ? 'checked' : ''} onchange="togglePlanEntry(${entry.id}, this.checked)">`
       : `<i class="bi ${entry.checked ? 'bi-check-circle-fill text-success' : 'bi-circle text-muted'}"></i>`}
     <span class="plan-cat-dot cat-${cat}" title="${catLabel}"></span>
-    <span class="plan-entry-text flex-grow-1 text-truncate"${trainer ? ` onclick="startPlanEntryEdit(${entry.id})"` : ''}>
+    <span class="plan-entry-text flex-grow-1 text-truncate"${edit ? ` onclick="startPlanEntryEdit(${entry.id})"` : ''}>
       ${composeInlineLabel(entry)}
     </span>
     ${entry.photo_url ? `
     <span class="plan-entry-photo-wrap">
       <img src="${entry.photo_url}" class="plan-entry-photo-thumb-sm" onclick="viewPlanEntryPhoto('${entry.photo_url}')">
-      ${trainer ? `<button class="plan-entry-photo-remove" title="${UI_STRINGS.btnRemovePhoto}" onclick="removePlanEntryPhotoFor(${entry.id}, event)">&times;</button>` : ''}
+      ${edit ? `<button class="plan-entry-photo-remove" title="${UI_STRINGS.btnRemovePhoto}" onclick="removePlanEntryPhotoFor(${entry.id}, event)">&times;</button>` : ''}
     </span>` : ''}
-    ${trainer ? `
+    ${edit ? `
     <button class="btn btn-xs btn-icon-only" title="${UI_STRINGS.btnAddPhoto}" onclick="triggerPlanEntryPhotoFor(${entry.id})"><i class="bi bi-camera" style="font-size:.75rem"></i></button>
     <button class="btn btn-xs btn-icon-only text-danger" onclick="deletePlanEntry(${entry.id})"><i class="bi bi-trash" style="font-size:.75rem"></i></button>` : ''}
   </div>`;
@@ -928,7 +931,7 @@ function renderAttendanceRowHTML(att) {
 
 function initSortable() {
   const container = document.getElementById('planEntriesContainer');
-  if (!container || !window.SESSION_IS_TRAINER) return;
+  if (!container || !window.SESSION_CAN_EDIT_PLAN) return;
   if (container._sortable) container._sortable.destroy();
   container._sortable = Sortable.create(container, {
     handle: '.drag-handle',

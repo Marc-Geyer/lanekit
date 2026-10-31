@@ -40,12 +40,14 @@ document.addEventListener('DOMContentLoaded', function () {
       bootstrap.Tooltip.getInstance(info.el)?.hide();
 
       const props = info.event.extendedProps;
+      if (props.type === 'public') return;     // anonymous visitors: group names only, nothing to open
       if (props.type === 'exception') { showExceptionModal(props); return; }
       openSessionModal(props.session_id, props.date, props.instance_id);
     },
 
     eventDidMount: function (info) {
       const props = info.event.extendedProps;
+      if (props.type === 'public') return;     // no location / reason for anonymous visitors
       const label = props.type === 'exception'
         ? `❌ ${props.reason}`
         : `📍 ${props.location || ''}`;
@@ -134,6 +136,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Set title
     if (modalTitle) modalTitle.textContent = 'Training – ' + formatDate(sessionDate);
+
+    window.SESSION_CAN_EDIT_PLAN = !!data.can_edit_plan;
 
     // Initialise WebSocket with the metadata returned by the view
     if (data.instance_id && data.is_trainer) {

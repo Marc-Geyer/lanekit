@@ -18,7 +18,7 @@ def mkuser(name, role='swimmer', superuser=False):
 class Feedback(TestCase):
     def setUp(self):
         self.g1 = Group.objects.create(name='A'); self.g2 = Group.objects.create(name='B')
-        self.tu, self.tsw = mkuser('trainer')                 # profile role swimmer, trainer of g1 only
+        self.tu, self.tsw = mkuser('trainer', role='trainer')   # profile trainer, trainer of g1 only
         GroupMembership.objects.create(group=self.g1, swimmer=self.tsw, role='trainer')
         self.m1 = Swimmer.objects.create(first_name='Mia', last_name='Eins')
         self.m2 = Swimmer.objects.create(first_name='Max', last_name='Zwei')
@@ -32,8 +32,13 @@ class Feedback(TestCase):
     # 3) Liste
     def test_list_shows_group_members(self):
         r = self.c.get(reverse('swimmer_list'))
-        names = {s.pk for s in r.context['swimmers']}
-        self.assertIn(self.m1.pk, names); self.assertNotIn(self.m2.pk, names)
+        by_pk = {s.pk: s for s in r.context['swimmers']}
+        # A trainer sees name + age of EVERYBODY, but contact data / group badges only for own groups.
+        self.assertIn(self.m1.pk, by_pk); self.assertIn(self.m2.pk, by_pk)
+        self.assertTrue(by_pk[self.m1.pk].show_contact)
+        self.assertFalse(by_pk[self.m2.pk].show_contact)
+        # group pills are visible for every group (read-only roster insight)
+        self.assertEqual([m.group.pk for m in by_pk[self.m2.pk].vis_memberships], [self.g2.pk])
 
     # 2) Bearbeiten
     def test_group_trainer_can_edit_member_not_foreign(self):
@@ -55,7 +60,7 @@ class Feedback(TestCase):
 
     def test_plain_swimmer_no_rights(self):
         mkuser('plain'); self.c.login(username='plain', password='x')
-        self.assertFalse(self.c.get(reverse('swimmer_detail', args=[self.m1.pk])).context['can_edit'])
+        self.assertEqual(self.c.get(reverse('swimmer_detail', args=[self.m1.pk])).status_code, 302)
 
     # Gruppen-Erstellung
     def test_group_member_create(self):
@@ -98,9 +103,11 @@ class Feedback(TestCase):
         html = r.json()['html']
         self.assertIn('addSwimmerPanel', html); self.assertIn('Max Zwei', html)
         self.assertIn('Mia Eins', html)   # already on the list -> still searchable (shown as 'in Liste')
-        self.c.logout()
+        mkuser('plain'); self.c.login(username='plain', password='x')
         html = self.c.get(reverse('session_modal', args=[self.rs.pk, '2026-10-05'])).json()['html']
         self.assertNotIn('addSwimmerPanel', html); self.assertNotIn('Max Zwei', html)
+        self.c.logout()
+        self.assertEqual(self.c.get(reverse('session_modal', args=[self.rs.pk, '2026-10-05'])).status_code, 403)
 
     def test_picker_options_contain_groups_and_all_active(self):
         Swimmer.objects.create(first_name='Off', last_name='Duty', active=False)

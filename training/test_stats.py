@@ -99,21 +99,29 @@ class PersonStatsTests(StatsBase):
     def test_detail_view_permissions(self):
         self.session(date.today(), {self.mia: 'present'})
         url = reverse('swimmer_detail', args=[self.mia.pk])
+        # profile trainer of NO group of the person: basic info + swim times only, no attendance stats
         mkuser('boss', role='trainer')
         self.client.login(username='boss', password='x')
         r = self.client.get(url)
-        self.assertEqual(r.context['stats']['present'], 1)
+        self.assertEqual(r.status_code, 200)
+        self.assertNotIn('stats', r.context)
+        self.assertIn('perf_data', r.context)
+        # trainer (profile trainer + trainer of the person's group): statistics over their own groups
+        _, head = mkuser('head', role='trainer')
+        GroupMembership.objects.create(group=self.g1, swimmer=head, role='trainer')
+        self.client.login(username='head', password='x')
+        self.assertEqual(self.client.get(url).context['stats']['present'], 1)
         mkuser('chief', role='admin')
         self.client.login(username='chief', password='x')
         self.assertIn('stats', self.client.get(url).context)
-        # a trainer of the group (profile role swimmer) gets no statistics
+        # an assistant (profile swimmer, trainer entry in the group) gets no statistics
         self.client.login(username='coach', password='x')
         r = self.client.get(url)
         self.assertEqual(r.status_code, 200)
         self.assertNotIn('stats', r.context)
         mkuser('plain')
         self.client.login(username='plain', password='x')
-        self.assertNotIn('stats', self.client.get(url).context)
+        self.assertEqual(self.client.get(url).status_code, 302)       # not even the record
 
 
 class GroupStatsTests(StatsBase):
@@ -142,21 +150,32 @@ class GroupStatsTests(StatsBase):
 
     def test_view_permissions(self):
         url = reverse('group_stats', args=[self.g1.pk])
+        other = reverse('group_stats', args=[self.g2.pk])
         detail = reverse('group_detail', args=[self.g1.pk])
-        # group trainer without a trainer/admin profile role: no access, no link
+        # assistant (profile swimmer, trainer entry): no statistics, no link
         self.client.login(username='coach', password='x')
-        self.assertRedirects(self.client.get(url), detail)
+        self.assertRedirects(self.client.get(url), reverse('group_list'))
         self.assertNotContains(self.client.get(detail), url)
         mkuser('plain')
         self.client.login(username='plain', password='x')
         self.assertEqual(self.client.get(url).status_code, 302)
-        for name, role in (('boss', 'trainer'), ('chief', 'admin')):
-            mkuser(name, role=role)
-            self.client.login(username=name, password='x')
-            self.assertEqual(self.client.get(url).status_code, 200)
-            self.assertEqual(self.client.get(url, {'range': 'prev_month', 'lanes': '1', 'optional': '1'}).status_code, 200)
-            self.assertEqual(self.client.get(reverse('group_stats', args=[self.g2.pk])).status_code, 200)
-            self.assertContains(self.client.get(detail), url)
+        # profile trainer without a trainer entry in the group: nothing
+        mkuser('boss', role='trainer')
+        self.client.login(username='boss', password='x')
+        self.assertEqual(self.client.get(url).status_code, 302)
+        # trainer of g1: statistics of g1 only
+        _, head = mkuser('head', role='trainer')
+        GroupMembership.objects.create(group=self.g1, swimmer=head, role='trainer')
+        self.client.login(username='head', password='x')
+        self.assertEqual(self.client.get(url).status_code, 200)
+        self.assertEqual(self.client.get(url, {'range': 'prev_month', 'lanes': '1', 'optional': '1'}).status_code, 200)
+        self.assertEqual(self.client.get(other).status_code, 302)
+        self.assertContains(self.client.get(detail), url)
+        # admin: everything
+        mkuser('chief', role='admin')
+        self.client.login(username='chief', password='x')
+        self.assertEqual(self.client.get(url).status_code, 200)
+        self.assertEqual(self.client.get(other).status_code, 200)
 
 
 class LaneModelTests(StatsBase):

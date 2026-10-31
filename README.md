@@ -11,12 +11,14 @@ A self-hosted Django application for managing swimming groups, training sessions
 - [Branding](#branding--organisation-name)
 - [Tech stack](#tech-stack)
 - [Development with Docker](#development-with-docker)
+- [Demo data for development](#demo-data-for-development)
 - [Production deployment](#production-deployment)
 - [Git on the server](#git-on-the-server)
 - [Running without Docker](#running-without-docker)
 - [Statistics](#statistics)
 - [Performance results](#performance-results)
 - [Key URLs](#key-urls)
+- [Access control](#access-control)
 - [Security](#security)
 - [How it works](#how-it-works)
 
@@ -110,6 +112,39 @@ docker compose down
 # Destroy volumes too (full reset)
 docker compose down -v
 ```
+
+---
+
+## Demo data for development
+
+`seed_dev_data` creates one account per access scenario plus groups, sessions, plans, attendance and swim times, so every rule from [Access control](#access-control) can be tried in the browser within a minute. It only exists for development: it refuses to run with `DEBUG=False` (override with `--force`, never do that in production).
+
+```bash
+# with Docker (dev stack running)
+docker compose exec app python manage.py seed_dev_data
+
+# without Docker
+python manage.py seed_dev_data
+
+# start over: removes everything the command created (and nothing else), then recreates it
+python manage.py seed_dev_data --reset
+```
+
+The command is idempotent – running it again refreshes passwords and adds whatever is missing. **Every demo account has the password `demo`.**
+
+| Login | Level | Good for trying |
+|---|---|---|
+| `demo_admin` | Admin | everything; link `demo_unlinked` to a person; create groups; edit exceptions for all sessions |
+| `demo_trainer_a` | Trainer of *Demo Group A* | full access in A, basic info only for people of B; accept the pending change proposal of `demo_swimmer_a` |
+| `demo_trainer_b` | Trainer of *Demo Group B* | the mirror image – must not see A's contact data, notes or statistics |
+| `demo_trainer_free` | Profile trainer without a group | sees name + age of everybody, nothing else; cannot start sessions |
+| `demo_assistant` | Assistant in A (swimmer in B) | operate A's sessions, tick plan entries, but no plan editing, no new people, no memberships; in B only a swimmer |
+| `demo_swimmer_a` | Swimmer in A | own profile, propose changes, last week's finished session (plan, own status, own times); next week's session shows nothing |
+| `demo_swimmer_b` | Swimmer in B | must not see anything of group A |
+| `demo_unlinked` | account without a person | admin linking flow |
+| *(not logged in)* | Anonymous | calendar with group names only |
+
+Each group has one session on *today's weekday* with no instance yet (open it as a trainer or assistant and press "Start session"), a finished instance last week and an upcoming one next week. A cancellation for all sessions is entered two weeks ahead, and `demo_swimmer_a` has an open change proposal. Tip: use one normal and one private browser window to compare two roles side by side.
 
 ---
 
@@ -449,8 +484,8 @@ Accepted time formats: `32,45`, `32.45`, `1:05,32`, `65,32`; a single decimal di
 | URL | Description |
 |---|---|
 | `/` | Calendar (main page) |
-| `/training/events/?start=…&end=…` | Calendar event JSON API (FullCalendar feed, read-only for anonymous users) |
-| `/training/session/<id>/<date>/` | Session modal content – GET=view, POST=create instance (trainer) |
+| `/training/events/?start=…&end=…` | Calendar event JSON API (FullCalendar feed; anonymous users get group names and time slots only) |
+| `/training/session/<id>/<date>/` | Session modal content – GET=view (full for assistants/trainers, own data for participants of a finished session, 403 anonymous), POST=create instance (assistant or higher) |
 | `/training/session/<id>/state/` | Polling fallback – current attendance + plan state (used when the WebSocket drops) |
 | `/training/session/<id>/attendance/` | REST attendance update – polling fallback for WebSocket writes |
 | `/training/session/<id>/settings/` | Trainer: set a session's lane count and "optional" flag (POST, JSON) |
@@ -462,10 +497,13 @@ Accepted time formats: `32,45`, `32.45`, `1:05,32`, `65,32`; a single decimal di
 | `/training/recurring/new/<group_id>/`, `/training/recurring/<id>/edit/` | Trainer: create/edit a recurring session |
 | `/training/exception/new/` | Trainer: create a session exception (cancellation) |
 | `/training/trainer/report/` | Trainer: quarterly attendance report |
-| `/training/group/<id>/stats/` | Trainer/Admin (profile role): group statistics – tab *Attendance* (default) and `?tab=times` (swim-time ranking) |
+| `/training/group/<id>/stats/` | Trainer of that group / admin: group statistics – tab *Attendance* (default) and `?tab=times` (swim-time ranking) |
 | `/ws/session/<instance_id>/` | WebSocket endpoint (live attendance + training plan) |
-| `/groups/` | Group list |
-| `/swimmers/` | People search (person detail incl. attendance statistics for profile trainers/admins) |
+| `/groups/` | Group list (everybody: name + number of current sessions; trainers/admins: members and detail page of every group, assistants: of their own groups) |
+| `/swimmers/` | People list (trainers: name + age of everybody; assistants: members of their groups; swimmers: not available) |
+| `/swimmers/<id>/` | Person page – scope depends on the viewer (see *Access control*) |
+| `/swimmers/<id>/propose/` | Swimmer: propose a change to the own record (POST) |
+| `/swimmers/<id>/proposals/<req>/approve/`, `…/reject/` | Trainer of one of the person's groups / admin: decide on a proposal (POST) |
 | `/accounts/login/` | Login (rate-limited) |
 | `/accounts/register/` | Self-registration – only for people already known as a `Swimmer` by e-mail (rate-limited) |
 | `/accounts/activate/<uidb64>/<token>/` | Account activation link (from the registration e-mail) |
@@ -480,6 +518,43 @@ Accepted time formats: `32,45`, `32.45`, `1:05,32`, `65,32`; a single decimal di
 
 ---
 
+## Access control
+
+All access decisions live in one place: **`accounts/permissions.py`**. Views, the WebSocket consumer and the navigation only ask `can_*` functions from that module – nobody tests `profile.role` or `GroupMembership.role` on their own. There are four levels (plus anonymous visitors):
+
+| Level | How someone gets it | What they may do |
+|---|---|---|
+| **Anonymous** | not logged in | Calendar with group names and time slots only, plus the number of *current* sessions per group on the group list. No locations, no cancellation reasons, no session modal, no member lists. |
+| **Swimmer** | profile role *swimmer*, trainer nowhere | Own person page with attendance and swim-time statistics. After a session has ended: the plan entries that were ticked off (open ones stay hidden, no strike-through – that is a trainer-side aid), the own attendance status and the own times. Cannot edit anything directly, but can **propose** changes to their own person record. |
+| **Assistant** (Hilfstrainer) | profile role *swimmer* **and** entered as *trainer* in a group | Only in **that** group: everything in the session modal (attendance, notes, lanes, swim times, adding people to the session, excuse links), but plan entries can only be ticked off – not created, edited, deleted or reordered. Sees name + age of the group's members, no contact data. Cannot create people or change memberships. |
+| **Trainer** | profile role *trainer* | Sees name + age of **everybody**, the member list and recurring sessions of **every** group (read-only) and the group pills in the people list. In groups where they are entered as trainer: full read/write access to members, sessions, plan, statistics, memberships (including handing out trainer rights), recurring sessions and exceptions. Other groups give no deeper insight – no session modal, attendance, notes, plan, contact data or statistics. Persons outside their groups: basic info and swim-time statistics only. Creates people only into one of their own groups. |
+| **Admin** | profile role *admin* | Everything. Exclusive: creating/deleting groups, exceptions that affect *all* sessions, user accounts and roles, swim times that belong to no session, deleting people. |
+
+Things worth knowing:
+
+- **Assistants are not a role of their own.** They are swimmers in the profile who additionally carry a *trainer* entry in a group. A profile trainer without a trainer entry in a group has no group rights there. The old login hook that promoted group trainers to profile role *trainer* is gone – existing accounts it already promoted have to be set back to *swimmer* by an admin (Accounts → user → role) if they should only be assistants.
+- **Group rights are per group**, evaluated against *active* memberships. Deactivating a trainer entry takes the rights away immediately, including for a running WebSocket connection (rights are re-checked on every message).
+- **Swim times** are only recorded for people on the session's attendance list (members and guests added to the session) – even trainers cannot time someone who is not on that list. Times without a session can only be created or changed by an admin.
+- **Change proposals** (`PersonChangeRequest`): a swimmer proposes new values for name, phone, birthday or emergency contact. A trainer of one of the person's groups, or an admin, accepts or rejects; nothing is written before that. The e-mail address keeps its own verified change flow; account things (password, language, avatar, bio) stay directly editable. Name and phone on the account form are read-only for everybody who may not edit their own person record directly.
+- **Persons seen by trainers**: name + age and the group pills for all; contact data, notes and attendance statistics only for members of the trainer's own groups. The person page of someone outside their groups stays at basic info + swim-time statistics. The search field only matches names – e-mail, phone and group names are only searched within people the viewer may see in full.
+
+### Tests – and how to keep them useful
+
+`accounts/test_permissions.py` calls **every endpoint once per role** (anonymous, swimmer, assistant, trainer of the group, trainer of another group, trainer without group, admin). A request counts as denied for 403, a redirect to the login page, or a "no permission" message – and for writes the action's effect must exist *exactly* for the allowed roles. A guard test lists all URL names and **fails when an endpoint is not classified**, so a new route cannot ship without a permission decision. `accounts/test_permissions_behaviour.py` covers what each role sees (modal, person page, lists, search), the rules around memberships, swim times, exceptions, proposals, locked account fields and the WebSocket.
+
+When you add or change something:
+
+1. Put the rule into `accounts/permissions.py` (never inline in a view).
+2. Add the endpoint to `rows()` in `accounts/test_permissions.py` – or to `PUBLIC_ENDPOINTS` if it is public by design.
+3. Add a positive **and** a negative test for the new rule.
+
+```bash
+python manage.py test accounts            # permission tests only
+python manage.py test                     # everything
+```
+
+---
+
 ## Security
 
 LaneKit is reachable from the public internet without a VPN, so the following is in place — and worth knowing about if you deploy it yourself:
@@ -488,7 +563,7 @@ LaneKit is reachable from the public internet without a VPN, so the following is
 - **Rate limiting** — `/accounts/login/` and `/accounts/register/` are rate-limited per client IP at the nginx layer (`limit_req_zone`), since both can be abused to brute-force or to spam e-mails.
 - **Sessions & CSRF** — Session cookies are `SameSite=Lax` and, outside `DEBUG`, `Secure`; `CSRF_TRUSTED_ORIGINS` is derived from `DOMAIN`. Sessions live ~6 months with sliding expiry, by design, so the installed PWA stays logged in.
 - **Self-excuse tokens** — `/excuse/<uuid>/` uses a random UUIDv4 per token (122 bits), single-use, and scoped to one `(swimmer, session, date)` triple — not practically guessable.
-- **WebSocket authorization** — `SessionConsumer` only accepts authenticated connections and verifies the user is an active trainer of that session's group at `connect()`; every subsequent action re-checks `is_trainer` before touching the database. Attendance writes are restricted to swimmers who are either active members of that group *or* already have an attendance row for this exact session — the latter covers guests added on the fly via "add swimmer" who aren't group members at all.
+- **WebSocket authorization** — `SessionConsumer` only accepts connections of staff of that session's group (assistant, trainer, admin) and re-evaluates the user's level on **every** message, so withdrawn rights take effect immediately; assistants cannot structure the plan, and photo broadcasts are re-read from the database instead of relaying client data. Attendance writes are restricted to swimmers who are either active members of that group *or* already have an attendance row for this exact session — the latter covers guests added on the fly via "add swimmer" who aren't group members at all.
 - **Calendar API** — `/training/events/` is intentionally public/read-only (see *How It Works* below) but rejects date ranges over 366 days to prevent a single request from forcing an expensive, unbounded query.
 - **Uploaded photos** — training-plan photos are verified to be decodable images (Pillow) before being stored, not just trusted by filename/content-type.
 - **Scraper honeypot** (`antibot` app) — a link invisible to real visitors (off-screen, `aria-hidden`, not tab-reachable) sits in `base.html`, and its path is disallowed in `/robots.txt`. Anything that requests it anyway — a scraper ignoring `robots.txt`, or one blindly following every raw `<a href>` — gets its IP blocked for 24h by `HoneypotBlockMiddleware`, applied to every route. Blocked IPs are visible/removable under **Admin → Bot-Schutz → Blocked IPs**, in case a shared IP (NAT, corporate proxy) ever trips it.

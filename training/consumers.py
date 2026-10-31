@@ -4,6 +4,13 @@ from channels.db import database_sync_to_async
 from django.utils import timezone
 
 
+# Numeric levels from accounts.permissions.Level (kept literal: that module imports Django models).
+ASSISTANT, TRAINER = 2, 3
+PLAN_STRUCTURE_ACTIONS = {
+    'add_plan_entry', 'delete_plan_entry', 'reorder_plan', 'photo_updated', 'photo_entry_created',
+}
+
+
 class SessionConsumer(AsyncJsonWebsocketConsumer):
     """WebSocket consumer for live attendance and training plan collaboration."""
 
@@ -16,27 +23,51 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
             await self.close()
             return
 
-        # Verify user is a trainer of this session's group
-        is_trainer = await self.check_is_trainer(user, self.session_id)
-        self.is_trainer = is_trainer
+        # Only staff of this session's group (assistant, trainer, admin) may listen at all.
+        # Swimmers read finished sessions through the regular HTTP views, never live.
+        level = await self.get_level()
+        if level < ASSISTANT:
+            await self.close(code=4403)
+            return
+        self.is_trainer = True
+        self.can_edit_plan = level >= TRAINER
 
         await self.channel_layer.group_add(self.room_group, self.channel_name)
         await self.accept()
 
         # Send current state on connect
         state = await self.get_session_state(self.session_id)
-        await self.send_json({'type': 'init', 'data': state, 'trainer': self.is_trainer})
+        await self.send_json({
+            'type': 'init', 'data': state, 'trainer': self.is_trainer,
+            'can_edit_plan': self.can_edit_plan,
+        })
 
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.room_group, self.channel_name)
 
     async def receive_json(self, content):
-        if not self.is_trainer:
+        # Permissions are re-evaluated for EVERY message: the connection outlives role changes
+        # (membership removed, trainer role withdrawn) and must not keep old rights.
+        level = await self.get_level()
+        if level < ASSISTANT:
             await self.send_json({'type': 'error', 'message': 'Keine Berechtigung'})
+            await self.close(code=4403)
             return
+        self.can_edit_plan = level >= TRAINER
 
         action = content.get('action')
         data = content.get('data', {})
+        if not isinstance(data, dict):
+            return
+
+        # Structuring the plan is trainer-only; assistants may only tick entries off.
+        if action in PLAN_STRUCTURE_ACTIONS and not self.can_edit_plan:
+            await self.send_json({'type': 'error', 'message': 'Keine Berechtigung'})
+            return
+        if action == 'update_plan_entry' and not self.can_edit_plan:
+            data = {'id': data.get('id'), 'checked': data.get('checked')}
+            if data['checked'] is None or data['id'] is None:
+                return
 
         if action == 'update_attendance':
 
@@ -95,20 +126,24 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
             # (binary data isn't sent over the JSON WebSocket). The client
             # re-broadcasts the resulting entry dict so every connected
             # device updates its view without re-querying the DB.
-            await self.channel_layer.group_send(self.room_group, {
-                'type': 'broadcast_plan_update',
-                'data': data,
-            })
+            entry = await self.db_get_plan_entry(data.get('id'))
+            if entry:
+                await self.channel_layer.group_send(self.room_group, {
+                    'type': 'broadcast_plan_update',
+                    'data': entry,
+                })
 
         elif action == 'photo_entry_created':
             # A brand-new plan entry created directly from a photo (see
             # plan_entry_photo_create_view) — same rationale as
             # photo_updated above, but this one is an addition, not an
             # update, so every connected device should insert a new row.
-            await self.channel_layer.group_send(self.room_group, {
-                'type': 'broadcast_plan_add',
-                'data': data,
-            })
+            entry = await self.db_get_plan_entry(data.get('id'))
+            if entry:
+                await self.channel_layer.group_send(self.room_group, {
+                    'type': 'broadcast_plan_add',
+                    'data': entry,
+                })
 
         elif action == 'attendance_added':
             # The row itself was created by session_add_swimmer_api; re-read it
@@ -158,23 +193,23 @@ class SessionConsumer(AsyncJsonWebsocketConsumer):
 
     # ── Database helpers (run in thread pool) ───────────────────────────────
     @database_sync_to_async
-    def check_is_trainer(self, user, session_id):
+    def get_level(self):
+        """The connected user's CURRENT group level for this session (see accounts/permissions.py)."""
+        from django.contrib.auth.models import User
         from training.models import SessionInstance
-        from groups.models import GroupMembership
+        from accounts import permissions as perm
         try:
-            instance = SessionInstance.objects.select_related('recurring_session__group').get(pk=session_id)
-            if user.profile.is_admin:
-                return True
-            if not hasattr(user, 'swimmer'):
-                return False
-            return GroupMembership.objects.filter(
-                group=instance.recurring_session.group,
-                swimmer=user.swimmer,
-                role=GroupMembership.ROLE_TRAINER,
-                active=True,
-            ).exists()
+            user = User.objects.select_related('profile').get(pk=self.scope['user'].pk)
+            instance = SessionInstance.objects.select_related('recurring_session').get(pk=self.session_id)
+            return int(perm.group_level(user, instance.recurring_session.group_id))
         except Exception:
-            return False
+            return 0
+
+    @database_sync_to_async
+    def db_get_plan_entry(self, entry_id):
+        from training.models import TrainingPlanEntry
+        entry = TrainingPlanEntry.objects.filter(pk=entry_id, session_id=self.session_id).first()
+        return entry.to_dict() if entry else None
 
     @database_sync_to_async
     def get_session_state(self, session_id):

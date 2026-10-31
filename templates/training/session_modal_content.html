@@ -99,7 +99,7 @@
       <i class="bi bi-chevron-down"></i>
     </div>
     <div class="collapse show" id="planBody">
-      {% if is_trainer %}
+      {% if can_edit_plan %}
         <div class="input-group input-group-sm mb-2">
           <input type="text" id="planQuickAdd"
                  class="form-control bg-transparent border-secondary text-light"
@@ -116,7 +116,7 @@
       <div id="planEntriesContainer">
         {% for entry in plan_entries %}
         <div class="plan-entry-row d-flex align-items-center gap-2{% if entry.checked %} is-checked{% endif %}" data-entry-id="{{ entry.id }}">
-          {% if is_trainer %}<span class="drag-handle"><i class="bi bi-grip-vertical"></i></span>{% endif %}
+          {% if can_edit_plan %}<span class="drag-handle"><i class="bi bi-grip-vertical"></i></span>{% endif %}
           {% if is_trainer %}
           <input type="checkbox" class="plan-check" {% if entry.checked %}checked{% endif %}
                  onchange="togglePlanEntry({{ entry.id }}, this.checked)">
@@ -126,16 +126,16 @@
           <span class="plan-cat-dot cat-{{ entry.category }}"
                 title="{% if entry.category == 'warmup' %}{{ t.cat_warmup }}{% elif entry.category == 'main' %}{{ t.cat_main }}{% else %}{{ t.cat_cooldown }}{% endif %}"></span>
           <span class="plan-entry-text flex-grow-1 text-truncate"
-                {% if is_trainer %}onclick="startPlanEntryEdit({{ entry.id }})"{% endif %}>
+                {% if can_edit_plan %}onclick="startPlanEntryEdit({{ entry.id }})"{% endif %}>
             {% if entry.distance %}{{ entry.distance }} · {% endif %}{% if entry.intensity %}{{ entry.intensity }} · {% endif %}{{ entry.description }}{% if entry.rest_seconds %} · ⏱{{ entry.rest_seconds }}s{% endif %}
           </span>
           {% if entry.photo %}
           <span class="plan-entry-photo-wrap">
             <img src="{{ entry.photo.url }}" class="plan-entry-photo-thumb-sm" onclick="viewPlanEntryPhoto('{{ entry.photo.url }}')">
-            {% if is_trainer %}<button class="plan-entry-photo-remove" title="{{ t.btn_remove_photo }}" onclick="removePlanEntryPhotoFor({{ entry.id }}, event)">&times;</button>{% endif %}
+            {% if can_edit_plan %}<button class="plan-entry-photo-remove" title="{{ t.btn_remove_photo }}" onclick="removePlanEntryPhotoFor({{ entry.id }}, event)">&times;</button>{% endif %}
           </span>
           {% endif %}
-          {% if is_trainer %}
+          {% if can_edit_plan %}
           <button class="btn btn-xs btn-icon-only" title="{{ t.btn_add_photo }}" onclick="triggerPlanEntryPhotoFor({{ entry.id }})"><i class="bi bi-camera" style="font-size:.75rem"></i></button>
           <button class="btn btn-xs btn-icon-only text-danger" onclick="deletePlanEntry({{ entry.id }})"><i class="bi bi-trash" style="font-size:.75rem"></i></button>
           {% endif %}
@@ -199,6 +199,7 @@
                style="max-height:220px;overflow-y:auto"></div>
           {{ picker_options|json_script:"addSwimmerData" }}
 
+          {% if can_create_person %}
           <div class="text-muted small text-center my-2">— {{ t.add_swimmer_or_new }} —</div>
 
           <div class="row g-2 mb-2">
@@ -213,11 +214,19 @@
           </div>
           <input id="addSwimmerPhone" type="tel" class="form-control form-control-sm bg-transparent border-secondary text-light mb-2"
                  placeholder="{{ t.add_swimmer_phone_ph }}" maxlength="30" autocomplete="off">
+          {% else %}
+          {# Assistants cannot create people: keep the ids the script reads, but hidden and empty. #}
+          <input id="addSwimmerFirst" type="hidden"><input id="addSwimmerLast" type="hidden"><input id="addSwimmerPhone" type="hidden">
+          {% endif %}
 
+          {% if can_join_group %}
           <div class="form-check small mb-2">
             <input class="form-check-input" type="checkbox" id="addSwimmerJoin" checked>
             <label class="form-check-label" for="addSwimmerJoin">{{ t.add_swimmer_join_group }}</label>
           </div>
+          {% else %}
+          <input class="d-none" type="checkbox" id="addSwimmerJoin">
+          {% endif %}
 
           <div class="d-flex align-items-center gap-2 flex-wrap">
             <button id="addSwimmerBtn" class="btn btn-primary btn-sm rounded-pill px-3" onclick="submitAddSwimmer()">
@@ -339,8 +348,43 @@
 </div>
 
 <!-- Shared hidden file input for plan-entry photos, targeted via _editingEntryId in session.js -->
-{% if is_trainer %}
+{% if can_edit_plan %}
 <input type="file" id="planPhotoInput" accept="image/*" style="display:none">
 {% endif %}
 
+{% elif instance and participant %}
+{# Finished session the viewer took part in: read-only, own data only. #}
+<div class="row g-3">
+  <div class="col-lg-6">
+    <h6 class="fw-bold mb-2"><i class="bi bi-clipboard2-data text-primary me-2"></i>{{ t.section_plan }}</h6>
+    {% for entry in participant.plan_entries %}
+    {# Only ticked entries reach this list; no strike-through (that is a trainer-side aid while ticking). #}
+    <div class="plan-entry-row d-flex align-items-center gap-2">
+      <span class="plan-cat-dot cat-{{ entry.category }}"></span>
+      <span class="plan-entry-text flex-grow-1">
+        {% if entry.distance %}{{ entry.distance }} · {% endif %}{% if entry.intensity %}{{ entry.intensity }} · {% endif %}{{ entry.description }}{% if entry.rest_seconds %} · ⏱{{ entry.rest_seconds }}s{% endif %}
+      </span>
+      {% if entry.photo %}<img src="{{ entry.photo.url }}" class="plan-entry-photo-thumb-sm" onclick="viewPlanEntryPhoto('{{ entry.photo.url }}')">{% endif %}
+    </div>
+    {% empty %}
+    <div class="text-center text-muted py-4 small">{{ t.no_entries }}</div>
+    {% endfor %}
+  </div>
+  <div class="col-lg-6">
+    <h6 class="fw-bold mb-2"><i class="bi bi-person-check text-primary me-2"></i>{{ t.section_attendance }}</h6>
+    {% with att=participant.attendance %}
+    <span class="badge {% if att.status == 'present' %}bg-success{% elif att.status == 'absent' %}bg-danger{% elif att.status == 'excused' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+      {% if att.status == 'present' %}{{ t.status_present }}{% elif att.status == 'absent' %}{{ t.status_absent }}{% elif att.status == 'excused' %}{{ t.status_excused }}{% else %}{{ t.status_unknown }}{% endif %}
+    </span>
+    {% endwith %}
+    <h6 class="fw-bold mt-4 mb-2"><i class="bi bi-stopwatch text-primary me-2"></i>{{ t.section_results }}</h6>
+    {% for r in participant.results %}
+    <div class="d-flex justify-content-between small border-bottom py-1" style="border-color:#334155!important">
+      <span>{{ r.distance }} m {{ r.stroke }}</span><span class="fw-semibold">{{ r.time }}</span>
+    </div>
+    {% empty %}
+    <p class="text-muted small mb-0">{{ t.participant_no_times }}</p>
+    {% endfor %}
+  </div>
+</div>
 {% endif %}

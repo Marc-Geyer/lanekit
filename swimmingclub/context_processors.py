@@ -34,15 +34,29 @@ def i18n(request):
 
 
 def trainer_status(request):
-    """Expose `is_group_trainer` (trainer role in at least one group) to all templates.
-    Used to show the trainer section in the navbar."""
-    user = getattr(request, 'user', None)
-    if user is None or not user.is_authenticated:
-        return {'is_group_trainer': False}
-    from groups.models import GroupMembership
+    """Expose the user's access level to all templates (see accounts/permissions.py).
 
+    ``is_group_trainer`` – entered as trainer in at least one group (trainer section in the navbar),
+    ``is_level_assistant`` / ``is_level_trainer`` / ``is_level_admin`` – global level at least that high,
+    ``can_*`` – shortcuts for navigation items.
+    Per-object decisions (one group, one person) are made in the views and passed in explicitly.
+    """
+    from accounts import permissions as perm
+    user = getattr(request, 'user', None)
+    lvl = perm.level(user)
+    own_id = getattr(perm.own_swimmer(user), 'pk', None)
+    match = getattr(request, 'resolver_match', None)
+    on_own_person = bool(
+        own_id and match and match.url_name == 'swimmer_detail' and match.kwargs.get('pk') == own_id
+    )
     return {
-        'is_group_trainer': GroupMembership.objects.filter(
-            swimmer__user=user, role=GroupMembership.ROLE_TRAINER,
-        ).exists()
+        'is_group_trainer': perm.can_view_trainer_report(user),
+        'access_level': int(lvl),
+        'is_level_assistant': lvl >= perm.Level.ASSISTANT,
+        'is_level_trainer': lvl >= perm.Level.TRAINER,
+        'is_level_admin': lvl >= perm.Level.ADMIN,
+        'can_create_group': perm.can_create_group(user),
+        'can_create_exception': perm.can_create_exception(user),
+        'own_swimmer_id': own_id,
+        'nav_on_own_person': on_own_person,   # "My profile" is the active nav item, not "People"
     }

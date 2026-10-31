@@ -17,17 +17,24 @@
       </div>
       <h5 class="fw-bold mb-1">{{ swimmer.full_name }}</h5>
       {% if not swimmer.active %}<span class="badge bg-secondary mb-2">{{ t.inactive }}</span>{% endif %}
+      {% if access_full %}
       {% if swimmer.email %}<p class="text-muted small mb-1"><i class="bi bi-envelope me-1"></i>{{ swimmer.email }}</p>{% endif %}
       {% if swimmer.phone %}<p class="text-muted small mb-1"><i class="bi bi-phone me-1"></i>{{ swimmer.phone }}</p>{% endif %}
       {% if swimmer.date_of_birth %}<p class="text-muted small mb-0"><i class="bi bi-cake me-1"></i>{{ swimmer.date_of_birth|date:"d.m.Y" }}</p>{% endif %}
+      {% elif swimmer.age is not None %}
+      <p class="text-muted small mb-0"><i class="bi bi-cake me-1"></i>{{ swimmer.age }} {{ t.age_years }}</p>
+      {% endif %}
     </div>
+
+    {% if access_full or available_groups %}
 
     <div class="sc-card p-3">
       <h6 class="fw-semibold mb-3"><i class="bi bi-people text-primary me-2"></i>{{ t.section_groups }}</h6>
 
+      {% if access_full %}
       {% for m in memberships %}{% if m.active %}
       <div class="d-flex align-items-center gap-2 mb-2">
-        <a href="{% url 'group_detail' m.group.pk %}" class="text-decoration-none flex-grow-1">
+        <a href="{% if m.group.pk in staff_group_ids %}{% url 'group_detail' m.group.pk %}{% else %}#{% endif %}" class="text-decoration-none flex-grow-1">
           <div class="d-flex align-items-center gap-2">
             <span class="group-swatch" style="background:{{ m.group.color }}"></span>
             <span class="small">{{ m.group.name }}</span>
@@ -47,6 +54,7 @@
       {% endif %}{% empty %}
       <p class="text-muted small mb-0">{{ t.no_groups_assigned }}</p>
       {% endfor %}
+      {% endif %}
 
       {% if available_groups %}
       <div class="mt-3 pt-2 border-top" style="border-color:#334155!important">
@@ -71,9 +79,43 @@
       </div>
       {% endif %}
     </div>
+    {% endif %}
   </div>
 
   <div class="col-lg-9">
+    {% if can_propose and proposal_form %}
+    <div class="sc-card p-4 mb-4">
+      <h5 class="fw-bold mb-2"><i class="bi bi-pencil-square text-primary me-2"></i>{{ t.proposal_title }}</h5>
+      <p class="text-muted small">{{ t.proposal_hint }}</p>
+      {% if pending_requests %}<div class="alert alert-info py-2 small">{{ t.proposal_pending }}</div>{% endif %}
+      <form method="post" action="{% url 'swimmer_propose' swimmer.pk %}">
+        {% csrf_token %}
+        {% crispy proposal_form %}
+      </form>
+    </div>
+    {% endif %}
+
+    {% if can_review and pending_requests %}
+    <div class="sc-card p-4 mb-4">
+      <h5 class="fw-bold mb-3"><i class="bi bi-inbox text-warning me-2"></i>{{ t.proposal_review_title }}</h5>
+      {% for req in pending_requests %}
+      <div class="border-bottom pb-2 mb-2" style="border-color:#334155!important">
+        <ul class="small mb-2">
+          {% for field, value in req.changes.items %}<li><code>{{ field }}</code>: {{ value|default:"–" }}</li>{% endfor %}
+        </ul>
+        <div class="d-flex gap-2">
+          <form method="post" action="{% url 'swimmer_proposal_approve' swimmer.pk req.pk %}">{% csrf_token %}
+            <button class="btn btn-success btn-sm rounded-pill px-3">{{ t.btn_accept }}</button>
+          </form>
+          <form method="post" action="{% url 'swimmer_proposal_reject' swimmer.pk req.pk %}">{% csrf_token %}
+            <button class="btn btn-outline-danger btn-sm rounded-pill px-3">{{ t.btn_reject }}</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
     {% if can_edit and form %}
     <div class="sc-card p-4 mb-4">
       <h5 class="fw-bold mb-4"><i class="bi bi-pencil-square text-primary me-2"></i>{{ t.section_edit }}</h5>
@@ -85,7 +127,7 @@
 
     {% if perf_data is not None %}{% include 'swimmers/_performance.html' %}{% endif %}
 
-    {% if swimmer.emergency_contact_name or swimmer.notes %}
+    {% if access_full and swimmer.emergency_contact_name or can_view_notes and swimmer.notes %}
     <div class="sc-card p-4">
       <h5 class="fw-bold mb-3"><i class="bi bi-info-circle text-primary me-2"></i>{{ t.emergency_contact }}</h5>
       {% if swimmer.emergency_contact_name %}
@@ -93,11 +135,11 @@
         {% if swimmer.emergency_contact_phone %} – {{ swimmer.emergency_contact_phone }}{% endif %}
       </p>
       {% endif %}
-      {% if swimmer.notes %}<p class="mb-0 text-muted">{{ swimmer.notes|linebreaksbr }}</p>{% endif %}
+      {% if can_view_notes and swimmer.notes %}<p class="mb-0 text-muted">{{ swimmer.notes|linebreaksbr }}</p>{% endif %}
     </div>
     {% endif %}
 
-    {% if can_edit and user.profile.is_admin %}
+    {% if can_edit and is_level_admin %}
     <div class="mt-3 text-end">
       <form method="post" action="{% url 'swimmer_delete' swimmer.pk %}"
             onsubmit="return confirm(UI_STRINGS.confirmDeactivate)">

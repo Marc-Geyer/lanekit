@@ -261,7 +261,8 @@ class ResultWebsocketTests(TransactionTestCase):
 class GroupTimesTabTests(ResultBase):
     def setUp(self):
         super().setUp()
-        self.admin_u, _ = mkuser('boss', role='trainer')      # profile trainer
+        self.admin_u, boss = mkuser('boss', role='trainer')   # profile trainer ...
+        GroupMembership.objects.create(group=self.g, swimmer=boss, role='trainer')   # ... of this group
         self.pool50 = Location.objects.create(name='Big', type='50m_Pool', city='x', street_address='y')
         self.day = date(2026, 10, 20)
 

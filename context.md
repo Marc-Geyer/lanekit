@@ -36,7 +36,9 @@
 
 ```
 accounts/    UserProfile extends auth.User; roles: admin / trainer / swimmer
-swimmers/    Swimmer model (can exist without a User account)
+             └── permissions.py  CENTRAL access rules – every permission decision goes here
+swimmers/    Swimmer model (can exist without a User account), PersonChangeRequest,
+             changes.py (apply/review proposals, account sync)
 groups/      Group + GroupMembership (role: swimmer / trainer)
 training/    RecurringSession, SessionException, SessionInstance,
              TrainingPlanEntry, Attendance, ExcuseToken
@@ -49,7 +51,8 @@ translations/ Custom i18n package (NOT Django gettext – see below)
 
 ### Key models
 - `UserProfile` — `OneToOneField(User)`, role, phone, bio, avatar
-- `Swimmer` — person record, optional `OneToOneField(User)`
+- `Swimmer` — person record, optional `OneToOneField(User)`; `age` property
+- `PersonChangeRequest` — a swimmer's proposed change to their own record (`changes` JSON, status pending/approved/rejected, reviewer)
 - `GroupMembership` — `(group, swimmer, role, active)`
 - `RecurringSession` — weekly slot `(group, day_of_week, start_time, end_time, location, valid_from, valid_until)`
 - `SessionException` — cancels sessions on a date (affects all or specific sessions)
@@ -58,6 +61,27 @@ translations/ Custom i18n package (NOT Django gettext – see below)
 - `ExcuseToken` — UUID-based one-time URL for self-excuse without login
 - `Attendance` — per-swimmer per-session status (present/absent/excused/unknown)
 - `PerformanceResult` — one timed swim: swimmer, optional session, date, location, stroke, `distance_m`, `time_cs` (hundredths of a second), `pool_length` (25/50), `is_official` (False for all training times; reserved for competitions). Helpers in `training/performance.py` (`parse_time`, `format_time`); entry UI `static/js/results.js`, chart `static/js/performance_chart.js` (Chart.js 4 via CDN, swimmer detail page)
+
+---
+
+## Access control (Oct 2026 rework) — READ BEFORE TOUCHING ANY VIEW
+
+Single source of truth: `accounts/permissions.py`. **Never** check `profile.role` / `GroupMembership.role` in a view, template or consumer — add or reuse a `can_*` function.
+
+Levels: Anonymous < Swimmer < Assistant (Hilfstrainer) < Trainer < Admin.
+- Assistant = profile role *swimmer* + trainer entry in a group (NOT a separate role). Trainer = profile role *trainer*. Group rights come from **active** `GroupMembership(role=trainer)`; a profile trainer has no rights in a group without that entry. The login hook that auto-promoted group trainers (`check_trainer_status`) was removed on purpose.
+- `group_level(user, group_id)` = what the user may do in ONE group; `level(user)` = global level for navigation and lists.
+- Session modal: assistants+ operate everything (attendance, notes, lanes, times, add people) but only tick plan entries (`can_edit_plan` = trainer+). Participants of a FINISHED session (`session_view`) see plan, own attendance, own times. Anonymous: nothing.
+- Group insight: `roster_group_ids` / `can_view_group` — trainers/admins may read the roster (members) and recurring sessions of EVERY group and see group pills in the people list; assistants only for their own groups; deeper data (modal, attendance, notes, plan, contact data, stats) always needs `group_level`. Everybody (even anonymous) sees the number of CURRENT sessions per group (`current_session_count`: active and not expired).
+- Participants of a finished session only see TICKED plan entries, without strike-through (filtered server-side in `session_modal_view` and `session_state_api`).
+- Persons: `person_access` → NONE / BASIC (name, age, swim-time statistics) / FULL. Trainers see name+age of everybody, FULL only for active members of groups they train. Swimmers: own record only, edit via `PersonChangeRequest`, never directly. `can_lock_person_fields` makes name/phone read-only on the account form (they sync into the person record).
+- Swim times: only for people on the session's attendance list (`swimmer_on_session`); session-less results admin only.
+- Exceptions: trainers only for their own groups' sessions; `affects_all` admin only. Groups: create/delete admin only.
+- WebSocket: staff only, level re-checked on every message; plan-structure actions trainer only; photo broadcasts re-read from the DB.
+- Tests: `accounts/test_permissions.py` (endpoint × role matrix + guard that fails for unclassified URL names) and `accounts/test_permissions_behaviour.py`. New endpoint → add a row. New rule → positive AND negative test.
+- Dev scenarios: `python manage.py seed_dev_data [--reset]` (accounts/management/commands) creates `demo_*` accounts (password `demo`) for every level plus sessions/plans/results; refuses with DEBUG=False. Keep it in sync when adding a role or scenario (`accounts/test_dev_seed_and_nav.py` checks it).
+- Navbar: "My profile" is shown for everybody with a linked person; its active state is separate from "People" (`nav_on_own_person` from the context processor).
+- Profile-trainer accounts that the old login hook already promoted keep role *trainer* until an admin sets them back to *swimmer* (assistants).
 
 ---
 
@@ -121,7 +145,8 @@ translations/
 | `/ws/session/<instance_id>/` | WebSocket endpoint |
 | `/set-language/?lang=xx` | Switch UI language (stored in session) |
 | `/groups/` | Group list |
-| `/swimmers/` | People search/list |
+| `/swimmers/` | People list (trainer+: everybody name+age; assistant: own groups' members; swimmer: n/a) |
+| `/swimmers/<id>/propose/`, `/swimmers/<id>/proposals/<req>/approve|reject/` | Change proposals (swimmer proposes, trainer of the person's group / admin decides) |
 | `/accounts/login/` | Login (nginx rate-limited) |
 | `/accounts/register/` | Self-registration, only for known `Swimmer` e-mails (nginx rate-limited) |
 | `/accounts/activate/<uidb64>/<token>/` | Account activation link |
@@ -186,6 +211,8 @@ Navbar shows `OrgName [LaneKit]` when `ORGANISATION_NAME` is set, else just `Lan
 
 ## Open / TODO
 
+- [ ] Existing accounts promoted by the removed login hook keep profile role *trainer* — an admin has to set pure assistants back to *swimmer*
+- [ ] `/media/` plan photos are served by nginx without authentication (unguessable-ish file names only); consider auth-gated serving now that swimmers can see plans
 - [ ] Form field labels are hardcoded in the form classes (not translated) — full translation would require Django's gettext on model verbose_names
 - [ ] Consider validating uploaded training-plan photos for size/dimensions too (currently only checked for being a decodable image, no explicit max-resolution guard beyond nginx's 20M body limit)
 - [ ] Consider whether `/accounts/register/`'s "e-mail already in use" message (and the equivalent in `UserProfileForm`) should be worded less specifically to reduce account enumeration — accepted as a low-severity trade-off for now in a club-internal tool

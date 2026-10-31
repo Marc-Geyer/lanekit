@@ -21,6 +21,7 @@ from swimmers.models import Swimmer
 from translations.helpers import tr
 from .forms import StyledAuthForm, RegisterForm, UserProfileForm
 from .models import UserProfile
+from . import permissions as perm
 
 logger = logging.getLogger(__name__)
 
@@ -35,23 +36,8 @@ def login_view(request):
     form = StyledAuthForm(data=request.POST or None)
     if request.method == 'POST' and form.is_valid():
         login(request, form.get_user())
-        # Check if User has trainer status and assign it
-        user = User.objects.get(pk=form.get_user().pk)
-        check_trainer_status(user)
         return redirect(request.GET.get('next', 'calendar'))
     return render(request, 'accounts/login.html', {'form': form})
-
-def check_trainer_status(user: User):
-    # check if user is trainer in some group
-    swimmer = Swimmer.objects.filter(user=user)
-    if not swimmer.exists():
-        return
-    if not swimmer.values('is_trainer')[0]:
-        return
-    # Don't overwrite admin status
-    if not user.profile.role == UserProfile.ROLE_ADMIN:
-        user.profile.role = UserProfile.ROLE_TRAINER
-        user.profile.save()
 
 def logout_view(request):
     logout(request)
@@ -165,7 +151,6 @@ def activate_view(request, uidb64, token):
             person.save()
 
         login(request, user)
-        check_trainer_status(user)
         messages.success(request, tr(request, 'msg_activ_successfull'))
         return redirect('calendar')
     return render(request, 'accounts/verification_failed.html', {'user': user})
@@ -228,7 +213,8 @@ def profile_view(request):
     form = UserProfileForm(
         request.POST or None, request.FILES or None,
         instance=profile, user=request.user,
-        can_edit_role=request.user.profile.is_admin,
+        can_edit_role=perm.is_admin(request.user),
+        lock_person_fields=perm.can_lock_person_fields(request.user),
     )
     if request.method == 'POST' and form.is_valid():
         form.save_user_fields(request.user)      # names only – e-mail needs verification
@@ -242,7 +228,7 @@ def profile_view(request):
 
 @login_required
 def user_list_view(request):
-    if not request.user.profile.is_admin:
+    if not perm.can_manage_accounts(request.user):
         messages.error(request, tr(request, 'msg_no_permission'))
         return redirect('calendar')
     q = request.GET.get('q', '').split()
@@ -263,7 +249,7 @@ def user_list_view(request):
 
 @login_required
 def user_detail_view(request, pk):
-    viewer_is_admin = request.user.profile.is_admin
+    viewer_is_admin = perm.can_manage_accounts(request.user)
     if not viewer_is_admin and request.user.pk != pk:
         messages.error(request, tr(request, 'msg_no_permission'))
         return redirect('calendar')
@@ -273,6 +259,7 @@ def user_detail_view(request, pk):
         request.POST or None, request.FILES or None,
         instance=profile, user=target_user,
         can_edit_role=viewer_is_admin,
+        lock_person_fields=perm.can_lock_person_fields(request.user) and request.user.pk == target_user.pk,
     )
     if request.method == 'POST' and form.is_valid():
         email_changed = form.email_changed()
@@ -301,7 +288,7 @@ def user_detail_view(request, pk):
 @require_POST
 def user_link_swimmer_view(request, pk):
     """Admin: link an account to an existing, not yet linked person."""
-    if not request.user.profile.is_admin:
+    if not perm.can_manage_accounts(request.user):
         messages.error(request, tr(request, 'msg_no_permission'))
         return redirect('calendar')
     target_user = get_object_or_404(User, pk=pk)
@@ -327,7 +314,7 @@ def user_link_swimmer_view(request, pk):
 @require_POST
 def user_unlink_swimmer_view(request, pk):
     """Admin: remove the link between an account and its person (both are kept)."""
-    if not request.user.profile.is_admin:
+    if not perm.can_manage_accounts(request.user):
         messages.error(request, tr(request, 'msg_no_permission'))
         return redirect('calendar')
     target_user = get_object_or_404(User, pk=pk)

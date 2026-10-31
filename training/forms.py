@@ -1,6 +1,7 @@
 from django import forms
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Submit, Row, Column, Field
+from accounts import permissions as perm
 from swimmingclub.widgets import EuDateInput, EuTimeInput
 from .models import RecurringSession, SessionException, TrainingPlanEntry
 
@@ -41,10 +42,18 @@ class SessionExceptionForm(forms.ModelForm):
             'affected_sessions': forms.CheckboxSelectMultiple(),
         }
 
-    def __init__(self, *args, request=None, **kwargs):
+    def __init__(self, *args, request=None, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['end_date'].required = False
         self._request = request
+        # Trainers may only cancel sessions of their own groups; "affects all" is admin-only.
+        restricted = user is not None and not perm.can_create_global_exception(user)
+        if restricted:
+            del self.fields['affects_all']
+            self.fields['affected_sessions'].queryset = RecurringSession.objects.filter(
+                group_id__in=perm.exception_group_ids(user),
+            )
+            self.fields['affected_sessions'].required = True
         if request is not None:
             from translations.helpers import tr
             self.fields['date'].label = tr(request, 'exception_date_label')
@@ -54,7 +63,7 @@ class SessionExceptionForm(forms.ModelForm):
         self.helper = FormHelper()
         self.helper.layout = Layout(
             Row(Column('date'), Column('end_date'), Column('reason')),
-            Field('affects_all'),
+            *([] if restricted else [Field('affects_all')]),
             Field('affected_sessions'),
             Submit('submit', 'Ausnahme speichern', css_class='btn btn-danger'),
         )

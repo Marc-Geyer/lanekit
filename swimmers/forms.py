@@ -3,6 +3,7 @@ from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Layout, Submit, Row, Column, Field, HTML
 from swimmingclub.widgets import EuDateInput
 from .models import Swimmer
+from .changes import PROPOSABLE_FIELDS
 
 
 class SwimmerForm(forms.ModelForm):
@@ -32,6 +33,25 @@ class SwimmerForm(forms.ModelForm):
         )
 
 
+class SwimmerProposalForm(forms.ModelForm):
+    """What a swimmer may propose for their own record (see swimmers/changes.py)."""
+
+    class Meta:
+        model = Swimmer
+        fields = PROPOSABLE_FIELDS
+        widgets = {'date_of_birth': EuDateInput()}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.helper = FormHelper()
+        self.helper.layout = Layout(
+            Row(Column('first_name'), Column('last_name')),
+            Row(Column('phone'), Column('date_of_birth')),
+            Row(Column('emergency_contact_name'), Column('emergency_contact_phone')),
+            Submit('submit', 'Vorschlagen', css_class='btn btn-primary'),
+        )
+
+
 class SwimmerCreateForm(SwimmerForm):
     """Extends SwimmerForm with optional group assignment fields.
     The group/group_role fields are not model fields; they are handled
@@ -49,11 +69,18 @@ class SwimmerCreateForm(SwimmerForm):
         label='Rolle',
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, allowed_group_ids=None, **kwargs):
+        """``allowed_group_ids``: None = every group (admin); otherwise the group is mandatory
+        and limited to these ids (trainers create people only into their own groups)."""
         super().__init__(*args, **kwargs)
 
         from groups.models import Group, GroupMembership
-        self.fields['group'].queryset = Group.objects.filter(active=True).order_by('name')
+        groups = Group.objects.filter(active=True).order_by('name')
+        if allowed_group_ids is not None:
+            groups = groups.filter(pk__in=allowed_group_ids)
+            self.fields['group'].required = True
+            self.fields['group'].empty_label = None
+        self.fields['group'].queryset = groups
         self.fields['group_role'].choices = GroupMembership.ROLE_CHOICES
         self.fields['group_role'].initial = GroupMembership.ROLE_SWIMMER
 
