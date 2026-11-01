@@ -659,6 +659,90 @@ class ProposalTests(PermFixture):
         self.assertFalse(r.context['can_review'])
 
 
+class ProposalOverviewTests(PermFixture):
+    """The notification bell and the overview page of open change proposals."""
+
+    def setUp(self):
+        super().setUp()
+        self.req_a = PersonChangeRequest.objects.create(          # swim_a is a member of group A
+            swimmer=self.people['swim_a'], proposed_by=self.users['swim_a'],
+            changes={'first_name': 'Newname', 'date_of_birth': '2001-02-03'})
+        self.req_b = PersonChangeRequest.objects.create(          # swim_b is a member of group B
+            swimmer=self.people['swim_b'], proposed_by=self.users['swim_b'], changes={'phone': '555'})
+
+    def overview(self, role):
+        self.login(role)
+        return self.client.get(reverse('proposal_list'))
+
+    def test_everybody_sees_exactly_the_proposals_they_may_decide_on(self):
+        ids = lambda role: {r.pk for r in self.overview(role).context['pending_requests']}
+        self.assertEqual(ids('trainer_a'), {self.req_a.pk})
+        self.assertEqual(ids('trainer_b'), {self.req_b.pk})
+        self.assertEqual(ids('admin'), {self.req_a.pk, self.req_b.pk})
+
+    def test_nobody_else_gets_the_page(self):
+        for role in ('assist_a', 'trainer_free', 'swim_a', 'swim_b', 'anon'):
+            self.assertEqual(self.overview(role).status_code, 302, role)
+
+    def test_bell_with_count_only_for_those_who_can_decide(self):
+        expect = {'trainer_a': 1, 'trainer_b': 1, 'admin': 2}
+        for role, count in expect.items():
+            self.login(role)
+            r = self.client.get(reverse('calendar'))
+            self.assertTrue(r.context['can_review_proposals'], role)
+            self.assertEqual(r.context['pending_proposal_count'], count, role)
+            self.assertIn(f'>{count}</span>', r.content.decode())
+            self.assertIn('bi-bell-fill', r.content.decode())
+        for role in ('assist_a', 'trainer_free', 'swim_a', 'anon'):
+            self.login(role)
+            r = self.client.get(reverse('calendar'))
+            self.assertFalse(r.context['can_review_proposals'], role)
+            self.assertEqual(r.context['pending_proposal_count'], 0, role)
+            self.assertNotIn(reverse('proposal_list'), r.content.decode(), role)
+
+    def test_bell_without_open_proposals_has_no_badge(self):
+        PersonChangeRequest.objects.all().delete()
+        self.login('trainer_a')
+        html = self.client.get(reverse('calendar')).content.decode()
+        self.assertIn(reverse('proposal_list'), html)           # still reachable
+        self.assertNotIn('bi-bell-fill', html)
+
+    def test_rows_show_current_and_proposed_values(self):
+        html = self.overview('trainer_a').content.decode()
+        for needed in ('Swim_A User', 'Swim_A', 'Newname', '01.01.2000', '03.02.2001'):
+            self.assertIn(needed, html)
+        self.assertNotIn('555', html)                           # somebody else's proposal
+
+    def test_deciding_from_the_overview_returns_to_it(self):
+        self.login('trainer_a')
+        r = self.client.post(reverse('swimmer_proposal_approve', args=[self.req_a.swimmer_id, self.req_a.pk]),
+                             {'next': 'proposals'})
+        self.assertRedirects(r, reverse('proposal_list'))
+        self.assertEqual(Swimmer.objects.get(pk=self.req_a.swimmer_id).first_name, 'Newname')
+        self.assertEqual(self.client.get(reverse('proposal_list')).context['pending_requests'], [])
+        # the foreign proposal is still out of reach for this trainer
+        r = self.client.post(reverse('swimmer_proposal_approve', args=[self.req_b.swimmer_id, self.req_b.pk]),
+                             {'next': 'proposals'})
+        self.assertEqual(PersonChangeRequest.objects.get(pk=self.req_b.pk).status, 'pending')
+
+    def test_decided_proposals_leave_the_list_and_the_count(self):
+        self.login('admin')
+        self.client.post(reverse('swimmer_proposal_reject', args=[self.req_b.swimmer_id, self.req_b.pk]),
+                         {'next': 'proposals'})
+        r = self.client.get(reverse('calendar'))
+        self.assertEqual(r.context['pending_proposal_count'], 1)
+
+    def test_withdrawn_group_membership_withdraws_the_proposal(self):
+        GroupMembership.objects.filter(group=self.grp_a, swimmer=self.people['swim_a']).update(active=False)
+        self.assertEqual(self.overview('trainer_a').context['pending_requests'], [])
+
+    def test_the_overview_uses_the_same_rule_as_the_person_page(self):
+        for role in ('trainer_a', 'trainer_b', 'admin', 'assist_a', 'trainer_free'):
+            visible = {r.pk for r in perm.reviewable_change_requests(self.users[role])}
+            for req in (self.req_a, self.req_b):
+                self.assertEqual(req.pk in visible, perm.can_review_person_change(self.users[role], req.swimmer), role)
+
+
 class AccountFormLockTests(PermFixture):
     """Name and phone on the account form sync into the person record – swimmers go through proposals."""
 

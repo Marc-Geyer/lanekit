@@ -203,9 +203,11 @@ def swimmer_detail_view(request, pk):
     proposal_form = None
     if can_propose:
         proposal_form = SwimmerProposalForm(instance=Swimmer.objects.get(pk=swimmer.pk))
-    pending = PersonChangeRequest.objects.none()
+    pending = []
     if can_propose or perm.can_review_person_change(request.user, swimmer):
-        pending = swimmer.change_requests.filter(status=PersonChangeRequest.STATUS_PENDING)
+        pending = list(swimmer.change_requests.filter(status=PersonChangeRequest.STATUS_PENDING))
+        for req in pending:
+            req.diff = changes.describe(req, request)
 
     return render(request, 'swimmers/detail.html', {
         **stats_ctx, **perf_ctx,
@@ -255,7 +257,21 @@ def _review_view(request, pk, req_pk, approve):
     change_request = get_object_or_404(PersonChangeRequest, pk=req_pk, swimmer=swimmer)
     changes.review(change_request, request.user, approve)
     messages.success(request, tr(request, 'msg_proposal_approved' if approve else 'msg_proposal_rejected'))
+    if request.POST.get('next') == 'proposals':          # decided from the overview page
+        return redirect('proposal_list')
     return redirect('swimmer_detail', pk=pk)
+
+
+@login_required
+def proposal_list_view(request):
+    """Overview of all open change proposals the user may decide on (target of the bell in the navbar)."""
+    if not perm.can_review_proposals(request.user):
+        messages.error(request, tr(request, 'msg_no_permission'))
+        return redirect('calendar')
+    pending = list(perm.reviewable_change_requests(request.user).order_by('created_at'))
+    for req in pending:
+        req.diff = changes.describe(req, request)
+    return render(request, 'swimmers/proposals.html', {'pending_requests': pending})
 
 
 @login_required

@@ -381,6 +381,28 @@ def can_review_person_change(user, swimmer):
     return can_edit_person(user, swimmer)
 
 
+def can_review_proposals(user):
+    """Is there anything this user could ever decide on? (Notification bell + overview page.)"""
+    return is_admin(user) or bool(groups_at_least(user, Level.TRAINER))
+
+
+def reviewable_change_requests(user):
+    """Open change proposals the user may accept or reject – exactly those for which
+    :func:`can_review_person_change` is true: everything for admins, otherwise proposals of people
+    who are active members of a group the user is TRAINER of."""
+    from groups.models import GroupMembership
+    from swimmers.models import PersonChangeRequest
+    pending = PersonChangeRequest.objects.filter(
+        status=PersonChangeRequest.STATUS_PENDING).select_related('swimmer', 'proposed_by')
+    if is_admin(user):
+        return pending
+    group_ids = groups_at_least(user, Level.TRAINER)
+    if not group_ids:
+        return pending.none()
+    members = GroupMembership.objects.filter(group_id__in=group_ids, active=True).values('swimmer_id')
+    return pending.filter(swimmer_id__in=members)
+
+
 def can_create_person(user, group_id=None):
     """Create a person. Admin: anywhere. Trainer: only into one of their own groups."""
     if is_admin(user):

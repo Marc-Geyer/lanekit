@@ -57,6 +57,10 @@ def trainer_status(request):
         'is_level_admin': lvl >= perm.Level.ADMIN,
         'can_create_group': perm.can_create_group(user),
         'can_create_exception': perm.can_create_exception(user),
+        'can_review_proposals': perm.can_review_proposals(user),
+        'pending_proposal_count': (
+            perm.reviewable_change_requests(user).count() if perm.can_review_proposals(user) else 0
+        ),
         'own_swimmer_id': own_id,
         'nav_on_own_person': on_own_person,   # "My profile" is the active nav item, not "People"
     }

@@ -1,0 +1,28 @@
+{# One open change proposal with accept / reject. Expects: req (with .diff); optional show_person, next_list. #}
+<div class="border-bottom pb-3 mb-3" style="border-color:#334155!important">
+  {% if show_person %}
+  <div class="d-flex align-items-center gap-2 mb-2">
+    <div class="sc-avatar-sm">{{ req.swimmer.initials }}</div>
+    <a href="{% url 'swimmer_detail' req.swimmer.pk %}" class="fw-semibold text-decoration-none text-light">{{ req.swimmer.full_name }}</a>
+    <span class="text-muted small ms-auto">{{ req.created_at|date:"d.m.Y H:i" }}</span>
+  </div>
+  {% endif %}
+  <table class="table table-sm table-borderless mb-2 small" style="--bs-table-bg:transparent;--bs-table-color:inherit">
+    <thead><tr class="text-muted"><th></th><th>{{ t.proposals_current }}</th><th>{{ t.proposals_proposed }}</th></tr></thead>
+    <tbody>
+      {% for row in req.diff %}
+      <tr><td class="text-muted">{{ row.label }}</td><td>{{ row.old }}</td><td class="fw-semibold text-warning">{{ row.new }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="d-flex gap-2">
+    <form method="post" action="{% url 'swimmer_proposal_approve' req.swimmer.pk req.pk %}">{% csrf_token %}
+      {% if next_list %}<input type="hidden" name="next" value="proposals">{% endif %}
+      <button class="btn btn-success btn-sm rounded-pill px-3"><i class="bi bi-check-lg me-1"></i>{{ t.btn_accept }}</button>
+    </form>
+    <form method="post" action="{% url 'swimmer_proposal_reject' req.swimmer.pk req.pk %}">{% csrf_token %}
+      {% if next_list %}<input type="hidden" name="next" value="proposals">{% endif %}
+      <button class="btn btn-outline-danger btn-sm rounded-pill px-3"><i class="bi bi-x-lg me-1"></i>{{ t.btn_reject }}</button>
+    </form>
+  </div>
+</div>

@@ -94,6 +94,20 @@
 
       <ul class="navbar-nav ms-auto gap-1 align-items-center">
 
+        {% if can_review_proposals %}
+        <!-- ── Notifications: open change proposals ── -->
+        <li class="nav-item">
+          <a class="nav-link nav-pill position-relative {% if request.resolver_match.url_name == 'proposal_list' %}active{% endif %}"
+             href="{% url 'proposal_list' %}" title="{{ t.nav_proposals }}" aria-label="{{ t.nav_proposals }}">
+            <i class="bi {% if pending_proposal_count %}bi-bell-fill{% else %}bi-bell{% endif %}"></i>
+            {% if pending_proposal_count %}
+            <span class="badge rounded-pill bg-danger position-absolute top-0 start-100 translate-middle"
+                  style="font-size:.62rem">{{ pending_proposal_count }}</span>
+            {% endif %}
+          </a>
+        </li>
+        {% endif %}
+
         <!-- ── Language switcher ── -->
         <li class="nav-item dropdown">
           <a class="nav-link nav-pill d-flex align-items-center gap-1 dropdown-toggle"

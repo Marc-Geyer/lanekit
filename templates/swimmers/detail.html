@@ -99,19 +99,7 @@
     <div class="sc-card p-4 mb-4">
       <h5 class="fw-bold mb-3"><i class="bi bi-inbox text-warning me-2"></i>{{ t.proposal_review_title }}</h5>
       {% for req in pending_requests %}
-      <div class="border-bottom pb-2 mb-2" style="border-color:#334155!important">
-        <ul class="small mb-2">
-          {% for field, value in req.changes.items %}<li><code>{{ field }}</code>: {{ value|default:"–" }}</li>{% endfor %}
-        </ul>
-        <div class="d-flex gap-2">
-          <form method="post" action="{% url 'swimmer_proposal_approve' swimmer.pk req.pk %}">{% csrf_token %}
-            <button class="btn btn-success btn-sm rounded-pill px-3">{{ t.btn_accept }}</button>
-          </form>
-          <form method="post" action="{% url 'swimmer_proposal_reject' swimmer.pk req.pk %}">{% csrf_token %}
-            <button class="btn btn-outline-danger btn-sm rounded-pill px-3">{{ t.btn_reject }}</button>
-          </form>
-        </div>
-      </div>
+        {% include 'swimmers/_proposal_card.html' %}
       {% endfor %}
     </div>
     {% endif %}

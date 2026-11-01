@@ -103,6 +103,8 @@ def rows(fx):
         E('swimmer_proposal_reject', A_MANAGE, '__reject__', 'post',
           effect=lambda: PersonChangeRequest.objects.get(swimmer=P['swim_a']).status == 'rejected',
           label='swimmer_proposal_reject'),
+        E('proposal_list', {'trainer_a', 'trainer_b', 'admin'}, reverse('proposal_list'),
+          label='proposal_list (anybody who can decide on proposals: trainers of a group, admin)'),
         E('swimmer_delete', ADMIN, reverse('swimmer_delete', args=[fx.kid_a.pk]), 'post',
           effect=lambda: not Swimmer.objects.get(pk=fx.kid_a.pk).active),
         E('swimmer_membership_add', A_MANAGE, reverse('swimmer_membership_add', args=[fx.kid_b.pk]), 'post',

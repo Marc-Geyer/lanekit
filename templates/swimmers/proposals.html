@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}{{ t.proposals_title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <h2 class="fw-bold mb-0" style="font-family:'Syne',sans-serif">
+    <i class="bi bi-bell text-primary me-2"></i>{{ t.proposals_title }}
+    {% if pending_requests %}<span class="badge bg-danger rounded-pill ms-2" style="font-size:.6em">{{ pending_requests|length }}</span>{% endif %}
+  </h2>
+</div>
+
+<div class="sc-card p-4">
+  {% for req in pending_requests %}
+    {% include 'swimmers/_proposal_card.html' with show_person=True next_list=True %}
+  {% empty %}
+  <p class="text-muted text-center py-4 mb-0"><i class="bi bi-check2-circle me-1"></i>{{ t.proposals_empty }}</p>
+  {% endfor %}
+</div>
+{% endblock %}

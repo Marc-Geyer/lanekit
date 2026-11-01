@@ -54,3 +54,22 @@ def review(change_request, reviewer, approve):
     change_request.reviewed_at = timezone.now()
     change_request.save()
     return True
+
+
+def describe(change_request, request):
+    """Readable rows for the review UI: [{'label', 'old', 'new'}], current value next to the proposal."""
+    from translations.helpers import tr
+    swimmer = change_request.swimmer
+
+    def show(field, value):
+        if field == 'date_of_birth':
+            value = date.fromisoformat(value).strftime('%d.%m.%Y') if isinstance(value, str) and value else (
+                value.strftime('%d.%m.%Y') if value else '')
+        return value or '–'
+
+    return [
+        {'label': tr(request, f'field_{field}'),
+         'old': show(field, getattr(swimmer, field)),
+         'new': show(field, value)}
+        for field, value in change_request.changes.items() if field in PROPOSABLE_FIELDS
+    ]
