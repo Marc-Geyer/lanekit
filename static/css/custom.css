@@ -243,7 +243,7 @@ body {
 /* ── Training plan ── */
 .plan-entry-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   background: var(--sc-surface);
   border: 1px solid var(--sc-border);
   border-radius: 8px;
@@ -265,9 +265,11 @@ body {
   font-size: .85rem;
   line-height: 1.3;
   cursor: text;
-  min-width: 0; /* let text-truncate actually truncate inside the flex row */
+  min-width: 0; /* allow wrapping inside the flex row instead of truncating */
+  overflow-wrap: anywhere;
 }
 .plan-entry-edit-input { font-size: .85rem; }
+textarea.plan-entry-edit-input { resize: none; overflow: hidden; line-height: 1.3; }
 
 .plan-entry-row.is-checked .plan-entry-text { text-decoration: line-through; opacity: .55; }
 .plan-entry-row.is-checked .plan-cat-dot    { opacity: .55; }
@@ -370,7 +372,6 @@ body {
   .fc .fc-toolbar { flex-direction: column; gap: .5rem; }
 }
 
-/* Swim-time entry: row being dragged */
-#resEntryBody tr.res-dragging { background: rgba(13, 110, 253, .18); }
+/* Swim-time entry: drag handle must not trigger text selection while dragging */
 #resEntryBody .res-handle { user-select: none; -webkit-user-select: none; }
 .flatpickr-calendar { font-family: inherit; }

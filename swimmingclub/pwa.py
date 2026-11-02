@@ -12,7 +12,7 @@ from django.templatetags.static import static
 from django.views.decorators.cache import never_cache
 
 # Bump to force clients to drop old caches.
-SW_VERSION = 'v2'
+SW_VERSION = 'v4'
 
 
 @never_cache
@@ -41,7 +41,7 @@ def manifest(request):
 
 @never_cache
 def service_worker(request):
-    precache = [static('css/custom.css'), static('js/calendar.js'), static('js/session.js'),
+    precache = [static('css/custom.css'), static('js/calendar.js'), static('js/session.js'), static('js/results.js'),
                 static('icons/icon-192.png'), '/offline/']
     js = render(request, 'pwa/sw.js', {'version': SW_VERSION, 'precache_json': json.dumps(precache)}).content
     resp = HttpResponse(js, content_type='application/javascript')

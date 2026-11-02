@@ -115,7 +115,7 @@
       {% endif %}
       <div id="planEntriesContainer">
         {% for entry in plan_entries %}
-        <div class="plan-entry-row d-flex align-items-center gap-2{% if entry.checked %} is-checked{% endif %}" data-entry-id="{{ entry.id }}">
+        <div class="plan-entry-row d-flex align-items-start gap-2{% if entry.checked %} is-checked{% endif %}" data-entry-id="{{ entry.id }}">
           {% if can_edit_plan %}<span class="drag-handle"><i class="bi bi-grip-vertical"></i></span>{% endif %}
           {% if is_trainer %}
           <input type="checkbox" class="plan-check" {% if entry.checked %}checked{% endif %}
@@ -125,7 +125,7 @@
           {% endif %}
           <span class="plan-cat-dot cat-{{ entry.category }}"
                 title="{% if entry.category == 'warmup' %}{{ t.cat_warmup }}{% elif entry.category == 'main' %}{{ t.cat_main }}{% else %}{{ t.cat_cooldown }}{% endif %}"></span>
-          <span class="plan-entry-text flex-grow-1 text-truncate"
+          <span class="plan-entry-text flex-grow-1"
                 {% if can_edit_plan %}onclick="startPlanEntryEdit({{ entry.id }})"{% endif %}>
             {% if entry.distance %}{{ entry.distance }} · {% endif %}{% if entry.intensity %}{{ entry.intensity }} · {% endif %}{{ entry.description }}{% if entry.rest_seconds %} · ⏱{{ entry.rest_seconds }}s{% endif %}
           </span>
@@ -359,7 +359,7 @@
     <h6 class="fw-bold mb-2"><i class="bi bi-clipboard2-data text-primary me-2"></i>{{ t.section_plan }}</h6>
     {% for entry in participant.plan_entries %}
     {# Only ticked entries reach this list; no strike-through (that is a trainer-side aid while ticking). #}
-    <div class="plan-entry-row d-flex align-items-center gap-2">
+    <div class="plan-entry-row d-flex align-items-start gap-2">
       <span class="plan-cat-dot cat-{{ entry.category }}"></span>
       <span class="plan-entry-text flex-grow-1">
         {% if entry.distance %}{{ entry.distance }} · {% endif %}{% if entry.intensity %}{{ entry.intensity }} · {% endif %}{{ entry.description }}{% if entry.rest_seconds %} · ⏱{{ entry.rest_seconds }}s{% endif %}

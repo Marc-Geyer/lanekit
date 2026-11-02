@@ -603,7 +603,7 @@ function parsePlanEntryText(raw, fallbackCategory) {
     text = (text.slice(0, intMatch.index) + text.slice(intMatch.index + intMatch[0].length)).trim();
   }
 
-  const description = text.replace(/\s{2,}/g, ' ').replace(/^[,;\s]+|[,;\s]+$/g, '');
+  const description = text.replace(/\s+/g, ' ').replace(/^[,;\s]+|[,;\s]+$/g, '');
 
   return { category, distance, intensity, rest_seconds, description };
 }
@@ -694,20 +694,30 @@ function uploadPhotoOnlyEntry(file) {
 }
 
 
-/* Click a row's text to turn it into an editable shorthand input. */
+/* Click a row's text to turn it into an editable multiline textarea. */
 window.startPlanEntryEdit = function (entryId) {
   const row = document.querySelector(`.plan-entry-row[data-entry-id="${entryId}"]`);
   const span = row && row.querySelector('.plan-entry-text');
   if (!span) return;
   const entry = (window._planCache && window._planCache[entryId]) || {};
 
-  const input = document.createElement('input');
-  input.type = 'text';
+  const input = document.createElement('textarea');
+  input.type = 'textarea';
   input.className = 'plan-entry-edit-input form-control form-control-sm bg-transparent border-secondary text-light flex-grow-1';
+  input.rows = 1;
   input.value = composePlanEntryText(entry);
   span.replaceWith(input);
+  input.style.height = 'auto';
+  input.style.height = `${input.scrollHeight}px`;
   input.focus();
   input.select();
+
+  /* Grow with content, never shrink below one line. */
+  const autosize = () => {
+    input.style.height = 'auto';
+    input.style.height = `${input.scrollHeight}px`;
+  };
+  input.addEventListener('input', autosize);
 
   let committed = false;
   const commit = () => {
@@ -719,7 +729,8 @@ window.startPlanEntryEdit = function (entryId) {
     handlePlanUpdate({ ...entry, ...parsed });
   };
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    // Enter commits, Shift+Enter inserts a line break – full multiline editing.
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
     if (e.key === 'Escape') { e.preventDefault(); committed = true; handlePlanUpdate(entry); }
   });
   input.addEventListener('blur', commit);
@@ -865,13 +876,13 @@ function renderPlanEntryHTML(entry) {
   const edit    = window.SESSION_CAN_EDIT_PLAN;       // may create / edit / delete / reorder
   const catLabel = { warmup: UI_STRINGS.catWarmup, main: UI_STRINGS.catMain, cooldown: UI_STRINGS.catCooldown }[cat] || cat;
   return `
-  <div class="plan-entry-row d-flex align-items-center gap-2${entry.checked ? ' is-checked' : ''}" data-entry-id="${entry.id}">
+  <div class="plan-entry-row d-flex align-items-start gap-2${entry.checked ? ' is-checked' : ''}" data-entry-id="${entry.id}">
     ${edit ? '<span class="drag-handle"><i class="bi bi-grip-vertical"></i></span>' : ''}
     ${trainer
       ? `<input type="checkbox" class="plan-check" ${entry.checked ? 'checked' : ''} onchange="togglePlanEntry(${entry.id}, this.checked)">`
       : `<i class="bi ${entry.checked ? 'bi-check-circle-fill text-success' : 'bi-circle text-muted'}"></i>`}
     <span class="plan-cat-dot cat-${cat}" title="${catLabel}"></span>
-    <span class="plan-entry-text flex-grow-1 text-truncate"${edit ? ` onclick="startPlanEntryEdit(${entry.id})"` : ''}>
+    <span class="plan-entry-text flex-grow-1"${edit ? ` onclick="startPlanEntryEdit(${entry.id})"` : ''}>
       ${composeInlineLabel(entry)}
     </span>
     ${entry.photo_url ? `
